@@ -448,8 +448,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         return updateAsync0(F0.asMap(key, val),
             null,
             null,
-            null,
-            null,
             true,
             false,
             filter,
@@ -465,8 +463,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         return updateAsync0(F0.asMap(key, val),
             null,
             null,
-            null,
-            null,
             false,
             false,
             filter,
@@ -479,8 +475,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         A.notNull(key, "key", val, "val");
 
         return (V)updateAsync0(F0.asMap(key, val),
-            null,
-            null,
             null,
             null,
             true,
@@ -559,8 +553,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     @SuppressWarnings("unchecked")
     @Override public IgniteInternalFuture<GridCacheReturn> replacexAsync(K key, V oldVal, V newVal) {
         return updateAsync0(F.asMap(key, newVal),
-            null,
-            null,
             null,
             null,
             true,
@@ -783,8 +775,6 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         IgniteInternalFuture<Map<K, EntryProcessorResult<T>>> fut = updateAsync0(null,
             invokeMap,
             args,
-            null,
-            null,
             false,
             false,
             null,
@@ -890,15 +880,13 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         @Nullable Map<? extends K, ? extends V> map,
         @Nullable Map<? extends K, ? extends EntryProcessor> invokeMap,
         @Nullable Object[] invokeArgs,
-        @Nullable Map<KeyCacheObject, GridCacheDrInfo> conflictPutMap,
-        @Nullable Map<KeyCacheObject, GridCacheVersion> conflictRmvMap,
         final boolean retval,
         final boolean rawRetval,
         @Nullable final CacheEntryPredicate[] filter,
         final boolean waitTopFut,
         final GridCacheOperation op
     ) {
-        return updateAllAsync0(map, invokeMap, invokeArgs, conflictPutMap, conflictRmvMap, retval, rawRetval, filter, waitTopFut, op);
+        return updateAllAsync0(map, invokeMap, invokeArgs, null, null, retval, rawRetval, filter, waitTopFut, op);
     }
 
     /**
