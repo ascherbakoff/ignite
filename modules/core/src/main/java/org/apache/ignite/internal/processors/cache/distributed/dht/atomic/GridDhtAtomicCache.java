@@ -994,28 +994,8 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         ctx.checkSecurity(SecurityPermission.CACHE_PUT);
 
-        CacheOperationContext opCtx = ctx.operationContextPerCall();
-
-        final GridNearAtomicUpdateFuture updateFut = new GridNearAtomicUpdateFuture(
-            ctx,
-            this,
-            ctx.config().getWriteSynchronizationMode(),
-            val != null ? UPDATE : TRANSFORM,
-            Collections.singletonList(key),
-            val != null ? Collections.singletonList(val) : Collections.singletonList(proc),
-            invokeArgs,
-            null,
-            null,
-            retval,
-            false,
-            opCtx != null ? opCtx.expiry() : null,
-            filter,
-            ctx.subjectIdPerCall(null, opCtx),
-            ctx.kernalContext().job().currentTaskNameHash(),
-            opCtx != null && opCtx.skipStore(),
-            opCtx != null && opCtx.isKeepBinary(),
-            opCtx != null && opCtx.noRetries() ? 1 : MAX_RETRIES,
-            waitTopFut);
+        final GridNearAtomicUpdateFuture updateFut =
+            createSingleUpdateFuture(key, val, proc, invokeArgs, retval, filter, waitTopFut);
 
         return asyncOp(new CO<IgniteInternalFuture<Object>>() {
             @Override public IgniteInternalFuture<Object> apply() {
@@ -1046,28 +1026,8 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         ctx.checkSecurity(SecurityPermission.CACHE_REMOVE);
 
-        CacheOperationContext opCtx = ctx.operationContextPerCall();
-
-        final GridNearAtomicUpdateFuture updateFut = new GridNearAtomicUpdateFuture(
-            ctx,
-            this,
-            ctx.config().getWriteSynchronizationMode(),
-            DELETE,
-            Collections.singletonList(key),
-            null,
-            null,
-            null,
-            null,
-            retval,
-            false,
-            (filter != null && opCtx != null) ? opCtx.expiry() : null,
-            filter,
-            ctx.subjectIdPerCall(null, opCtx),
-            ctx.kernalContext().job().currentTaskNameHash(),
-            opCtx != null && opCtx.skipStore(),
-            opCtx != null && opCtx.isKeepBinary(),
-            opCtx != null && opCtx.noRetries() ? 1 : MAX_RETRIES,
-            true);
+        final GridNearAtomicUpdateFuture updateFut =
+            createSingleUpdateFuture(key, null, null, null, retval, filter, true);
 
         if (statsEnabled)
             updateFut.listen(new UpdateRemoveTimeStatClosure<>(metrics0(), start));
@@ -1079,6 +1039,67 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
                 return updateFut;
             }
         });
+    }
+
+    /**
+     * Craete future for single key-val pair update.
+     *
+     * @param key Key.
+     * @param val Value.
+     * @param proc Processor.
+     * @param invokeArgs Invoke arguments.
+     * @param retval Return value flag.
+     * @param filter Filter.
+     * @param waitTopFut Whether to wait for topology future.
+     * @return Future.
+     */
+    private GridNearAtomicUpdateFuture createSingleUpdateFuture(
+        K key,
+        @Nullable V val,
+        @Nullable EntryProcessor proc,
+        @Nullable Object[] invokeArgs,
+        boolean retval,
+        @Nullable final CacheEntryPredicate[] filter,
+        boolean waitTopFut
+    ) {
+        GridCacheOperation op;
+        Collection vals;
+
+        if (val != null) {
+            op = UPDATE;
+            vals = Collections.singletonList(val);
+        }
+        else if (proc != null) {
+            op = TRANSFORM;
+            vals = Collections.singletonList(proc);
+        }
+        else {
+            op = DELETE;
+            vals = null;
+        }
+
+        CacheOperationContext opCtx = ctx.operationContextPerCall();
+
+        return new GridNearAtomicUpdateFuture(
+            ctx,
+            this,
+            ctx.config().getWriteSynchronizationMode(),
+            op,
+            Collections.singletonList(key),
+            vals,
+            invokeArgs,
+            null,
+            null,
+            retval,
+            false,
+            opCtx != null ? opCtx.expiry() : null,
+            filter,
+            ctx.subjectIdPerCall(null, opCtx),
+            ctx.kernalContext().job().currentTaskNameHash(),
+            opCtx != null && opCtx.skipStore(),
+            opCtx != null && opCtx.isKeepBinary(),
+            opCtx != null && opCtx.noRetries() ? 1 : MAX_RETRIES,
+            waitTopFut);
     }
 
     /**
