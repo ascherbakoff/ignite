@@ -251,11 +251,6 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
     }
 
     /** {@inheritDoc} */
-    @Override public Collection<?> keys() {
-        return keys;
-    }
-
-    /** {@inheritDoc} */
     @Override public boolean onNodeLeft(UUID nodeId) {
         state.onNodeLeft(nodeId);
 

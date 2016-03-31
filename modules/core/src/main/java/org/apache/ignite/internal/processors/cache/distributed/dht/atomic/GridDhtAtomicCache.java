@@ -1063,19 +1063,19 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
         boolean waitTopFut
     ) {
         GridCacheOperation op;
-        Collection vals;
+        Object updVal;
 
         if (val != null) {
             op = UPDATE;
-            vals = Collections.singletonList(val);
+            updVal = val;
         }
         else if (proc != null) {
             op = TRANSFORM;
-            vals = Collections.singletonList(proc);
+            updVal = proc;
         }
         else {
             op = DELETE;
-            vals = null;
+            updVal = null;
         }
 
         CacheOperationContext opCtx = ctx.operationContextPerCall();
@@ -1085,8 +1085,8 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             this,
             ctx.config().getWriteSynchronizationMode(),
             op,
-            Collections.singletonList(key),
-            vals,
+            key,
+            updVal,
             invokeArgs,
             retval,
             opCtx != null ? opCtx.expiry() : null,
