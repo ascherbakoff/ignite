@@ -17,14 +17,6 @@
 
 package org.apache.ignite.internal.processors.cache.distributed.dht.atomic;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
-import javax.cache.expiry.ExpiryPolicy;
 import org.apache.ignite.IgniteCheckedException;
 import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.cache.CacheWriteSynchronizationMode;
@@ -45,7 +37,6 @@ import org.apache.ignite.internal.processors.cache.GridCacheTryPutFailedExceptio
 import org.apache.ignite.internal.processors.cache.KeyCacheObject;
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtTopologyFuture;
 import org.apache.ignite.internal.processors.cache.distributed.near.GridNearAtomicCache;
-import org.apache.ignite.internal.processors.cache.dr.GridCacheDrInfo;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
 import org.apache.ignite.internal.util.future.GridFinishedFuture;
 import org.apache.ignite.internal.util.future.GridFutureAdapter;
@@ -60,6 +51,15 @@ import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteUuid;
 import org.jetbrains.annotations.Nullable;
 
+import javax.cache.expiry.ExpiryPolicy;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+
 import static org.apache.ignite.cache.CacheAtomicWriteOrderMode.CLOCK;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_ASYNC;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
@@ -67,9 +67,10 @@ import static org.apache.ignite.cache.CacheWriteSynchronizationMode.PRIMARY_SYNC
 import static org.apache.ignite.internal.processors.cache.GridCacheOperation.TRANSFORM;
 
 /**
- * DHT atomic cache near update future.
+ * DHT atomic cache near single update future.
  */
-public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implements GridCacheAtomicFuture<Object> {
+public class GridNearAtomicSingleUpdateFuture extends GridFutureAdapter<Object>
+    implements GridCacheAtomicFuture<Object> {
     /** Logger reference. */
     private static final AtomicReference<IgniteLogger> logRef = new AtomicReference<>();
 
@@ -95,14 +96,6 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
     /** Optional arguments for entry processor. */
     private Object[] invokeArgs;
 
-    /** Conflict put values. */
-    @SuppressWarnings({"FieldAccessedSynchronizedAndUnsynchronized"})
-    private Collection<GridCacheDrInfo> conflictPutVals;
-
-    /** Conflict remove values. */
-    @SuppressWarnings({"FieldAccessedSynchronizedAndUnsynchronized"})
-    private Collection<GridCacheVersion> conflictRmvVals;
-
     /** Return value require flag. */
     private final boolean retval;
 
@@ -114,9 +107,6 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
 
     /** Write synchronization mode. */
     private final CacheWriteSynchronizationMode syncMode;
-
-    /** Raw return value flag. */
-    private final boolean rawRetval;
 
     /** Fast map flag. */
     private final boolean fastMap;
@@ -156,10 +146,7 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
      * @param keys Keys to update.
      * @param vals Values or transform closure.
      * @param invokeArgs Optional arguments for entry processor.
-     * @param conflictPutVals Conflict put values (optional).
-     * @param conflictRmvVals Conflict remove values (optional).
      * @param retval Return value require flag.
-     * @param rawRetval {@code True} if should return {@code GridCacheReturn} as future result.
      * @param expiryPlc Expiry policy explicitly specified for cache operation.
      * @param filter Entry filter.
      * @param subjId Subject ID.
@@ -169,7 +156,7 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
      * @param remapCnt Maximum number of retries.
      * @param waitTopFut If {@code false} does not wait for affinity change future.
      */
-    public GridNearAtomicUpdateFuture(
+    public GridNearAtomicSingleUpdateFuture(
         GridCacheContext cctx,
         GridDhtAtomicCache cache,
         CacheWriteSynchronizationMode syncMode,
@@ -177,10 +164,7 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
         Collection<?> keys,
         @Nullable Collection<?> vals,
         @Nullable Object[] invokeArgs,
-        @Nullable Collection<GridCacheDrInfo> conflictPutVals,
-        @Nullable Collection<GridCacheVersion> conflictRmvVals,
         final boolean retval,
-        final boolean rawRetval,
         @Nullable ExpiryPolicy expiryPlc,
         final CacheEntryPredicate[] filter,
         UUID subjId,
@@ -190,11 +174,7 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
         int remapCnt,
         boolean waitTopFut
     ) {
-        this.rawRetval = rawRetval;
-
         assert vals == null || vals.size() == keys.size();
-        assert conflictPutVals == null || conflictPutVals.size() == keys.size();
-        assert conflictRmvVals == null || conflictRmvVals.size() == keys.size();
         assert subjId != null;
 
         this.cctx = cctx;
@@ -204,8 +184,6 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
         this.keys = keys;
         this.vals = vals;
         this.invokeArgs = invokeArgs;
-        this.conflictPutVals = conflictPutVals;
-        this.conflictRmvVals = conflictRmvVals;
         this.retval = retval;
         this.expiryPlc = expiryPlc;
         this.filter = filter;
@@ -315,7 +293,7 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
         GridCacheReturn ret = (GridCacheReturn)res;
 
         Object retval =
-            res == null ? null : rawRetval ? ret : (this.retval || op == TRANSFORM) ?
+            res == null ? null : (this.retval || op == TRANSFORM) ?
                 cctx.unwrapBinaryIfNeeded(ret.value(), keepBinary) : ret.success();
 
         if (op == TRANSFORM && retval == null)
@@ -603,7 +581,7 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
          * @param res Response.
          * @param nodeErr {@code True} if response was created on node failure.
          */
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "ThrowableResultOfMethodCallIgnored"})
         void onResult(UUID nodeId, GridNearAtomicUpdateResponse res, boolean nodeErr) {
             GridNearAtomicUpdateRequest req;
 
@@ -887,7 +865,7 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
                         else
                             mappings0 = pendingMappings;
 
-                        assert !mappings0.isEmpty() || size == 0 : GridNearAtomicUpdateFuture.this;
+                        assert !mappings0.isEmpty() || size == 0 : GridNearAtomicSingleUpdateFuture.this;
                     }
                 }
 
@@ -918,8 +896,8 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
             }
 
             if (storeFuture()) {
-                if (!cctx.mvcc().addAtomicFuture(futVer, GridNearAtomicUpdateFuture.this)) {
-                    assert isDone() : GridNearAtomicUpdateFuture.this;
+                if (!cctx.mvcc().addAtomicFuture(futVer, GridNearAtomicSingleUpdateFuture.this)) {
+                    assert isDone() : GridNearAtomicSingleUpdateFuture.this;
 
                     return;
                 }
@@ -999,16 +977,6 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
             if (vals != null)
                 it = vals.iterator();
 
-            Iterator<GridCacheDrInfo> conflictPutValsIt = null;
-
-            if (conflictPutVals != null)
-                conflictPutValsIt = conflictPutVals.iterator();
-
-            Iterator<GridCacheVersion> conflictRmvValsIt = null;
-
-            if (conflictRmvVals != null)
-                conflictRmvValsIt = conflictRmvVals.iterator();
-
             Map<UUID, GridNearAtomicUpdateRequest> pendingMappings = U.newHashMap(topNodes.size());
 
             // Create mappings first, then send messages.
@@ -1017,38 +985,15 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
                     throw new NullPointerException("Null key.");
 
                 Object val;
-                GridCacheVersion conflictVer;
-                long conflictTtl;
-                long conflictExpireTime;
 
                 if (vals != null) {
                     val = it.next();
-                    conflictVer = null;
-                    conflictTtl = CU.TTL_NOT_CHANGED;
-                    conflictExpireTime = CU.EXPIRE_TIME_CALCULATE;
 
                     if (val == null)
                         throw new NullPointerException("Null value.");
                 }
-                else if (conflictPutVals != null) {
-                    GridCacheDrInfo conflictPutVal = conflictPutValsIt.next();
-
-                    val = conflictPutVal.valueEx();
-                    conflictVer = conflictPutVal.version();
-                    conflictTtl =  conflictPutVal.ttl();
-                    conflictExpireTime = conflictPutVal.expireTime();
-                }
-                else if (conflictRmvVals != null) {
-                    val = null;
-                    conflictVer = conflictRmvValsIt.next();
-                    conflictTtl = CU.TTL_NOT_CHANGED;
-                    conflictExpireTime = CU.EXPIRE_TIME_CALCULATE;
-                }
                 else {
                     val = null;
-                    conflictVer = null;
-                    conflictTtl = CU.TTL_NOT_CHANGED;
-                    conflictExpireTime = CU.EXPIRE_TIME_CALCULATE;
                 }
 
                 if (val == null && op != GridCacheOperation.DELETE)
@@ -1105,7 +1050,13 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
                         pendingMappings.put(nodeId, mapped);
                     }
 
-                    mapped.addUpdateEntry(cacheKey, val, conflictTtl, conflictExpireTime, conflictVer, i == 0);
+                    mapped.addUpdateEntry(cacheKey,
+                        val,
+                        CU.TTL_NOT_CHANGED,
+                        CU.EXPIRE_TIME_CALCULATE,
+                        null,
+                        i == 0
+                    );
 
                     i++;
                 }
@@ -1127,40 +1078,13 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
             Object key = F.first(keys);
 
             Object val;
-            GridCacheVersion conflictVer;
-            long conflictTtl;
-            long conflictExpireTime;
 
-            if (vals != null) {
+            if (vals != null)
                 // Regular PUT.
                 val = F.first(vals);
-                conflictVer = null;
-                conflictTtl = CU.TTL_NOT_CHANGED;
-                conflictExpireTime = CU.EXPIRE_TIME_CALCULATE;
-            }
-            else if (conflictPutVals != null) {
-                // Conflict PUT.
-                GridCacheDrInfo conflictPutVal = F.first(conflictPutVals);
-
-                val = conflictPutVal.valueEx();
-                conflictVer = conflictPutVal.version();
-                conflictTtl = conflictPutVal.ttl();
-                conflictExpireTime = conflictPutVal.expireTime();
-            }
-            else if (conflictRmvVals != null) {
-                // Conflict REMOVE.
-                val = null;
-                conflictVer = F.first(conflictRmvVals);
-                conflictTtl = CU.TTL_NOT_CHANGED;
-                conflictExpireTime = CU.EXPIRE_TIME_CALCULATE;
-            }
-            else {
+            else
                 // Regular REMOVE.
                 val = null;
-                conflictVer = null;
-                conflictTtl = CU.TTL_NOT_CHANGED;
-                conflictExpireTime = CU.EXPIRE_TIME_CALCULATE;
-            }
 
             // We still can get here if user pass map with single element.
             if (key == null)
@@ -1204,9 +1128,9 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
 
             req.addUpdateEntry(cacheKey,
                 val,
-                conflictTtl,
-                conflictExpireTime,
-                conflictVer,
+                CU.TTL_NOT_CHANGED,
+                CU.EXPIRE_TIME_CALCULATE,
+                null,
                 true);
 
             return req;
@@ -1257,6 +1181,6 @@ public class GridNearAtomicUpdateFuture extends GridFutureAdapter<Object> implem
 
     /** {@inheritDoc} */
     public String toString() {
-        return S.toString(GridNearAtomicUpdateFuture.class, this, super.toString());
+        return S.toString(GridNearAtomicSingleUpdateFuture.class, this, super.toString());
     }
 }

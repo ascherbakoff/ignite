@@ -994,7 +994,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         ctx.checkSecurity(SecurityPermission.CACHE_PUT);
 
-        final GridNearAtomicUpdateFuture updateFut =
+        final GridNearAtomicSingleUpdateFuture updateFut =
             createSingleUpdateFuture(key, val, proc, invokeArgs, retval, filter, waitTopFut);
 
         return asyncOp(new CO<IgniteInternalFuture<Object>>() {
@@ -1026,7 +1026,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         ctx.checkSecurity(SecurityPermission.CACHE_REMOVE);
 
-        final GridNearAtomicUpdateFuture updateFut =
+        final GridNearAtomicSingleUpdateFuture updateFut =
             createSingleUpdateFuture(key, null, null, null, retval, filter, true);
 
         if (statsEnabled)
@@ -1053,7 +1053,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
      * @param waitTopFut Whether to wait for topology future.
      * @return Future.
      */
-    private GridNearAtomicUpdateFuture createSingleUpdateFuture(
+    private GridNearAtomicSingleUpdateFuture createSingleUpdateFuture(
         K key,
         @Nullable V val,
         @Nullable EntryProcessor proc,
@@ -1080,7 +1080,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         CacheOperationContext opCtx = ctx.operationContextPerCall();
 
-        return new GridNearAtomicUpdateFuture(
+        return new GridNearAtomicSingleUpdateFuture(
             ctx,
             this,
             ctx.config().getWriteSynchronizationMode(),
@@ -1088,10 +1088,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             Collections.singletonList(key),
             vals,
             invokeArgs,
-            null,
-            null,
             retval,
-            false,
             opCtx != null ? opCtx.expiry() : null,
             filter,
             ctx.subjectIdPerCall(null, opCtx),
@@ -2878,10 +2875,17 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         res.nodeId(ctx.localNodeId());
 
-        GridNearAtomicUpdateFuture fut = (GridNearAtomicUpdateFuture)ctx.mvcc().atomicFuture(res.futureVersion());
+        IgniteInternalFuture fut = ctx.mvcc().atomicFuture(res.futureVersion());
 
-        if (fut != null)
-            fut.onResult(nodeId, res);
+        if (fut != null) {
+            if (fut instanceof GridNearAtomicUpdateFuture)
+                ((GridNearAtomicUpdateFuture)fut).onResult(nodeId, res);
+            else {
+                assert fut instanceof GridNearAtomicSingleUpdateFuture;
+
+                ((GridNearAtomicSingleUpdateFuture)fut).onResult(nodeId, res);
+            }
+        }
         else
             U.warn(log, "Failed to find near update future for update response (will ignore) " +
                 "[nodeId=" + nodeId + ", res=" + res + ']');
