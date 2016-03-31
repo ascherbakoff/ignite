@@ -1725,43 +1725,6 @@ public interface IgniteInternalCache<K, V> extends Iterable<Cache.Entry<K, V>> {
     public GridCacheReturn replacex(K key, V oldVal, V newVal) throws IgniteCheckedException;
 
     /**
-     * Removes given key mapping from cache if one exists and value is equal to the passed in value.
-     * <p>
-     * If write-through is enabled, the value will be removed from {@link CacheStore}
-     * via {@link CacheStore#delete(Object)} method.
-     * <h2 class="header">Transactions</h2>
-     * This method is transactional and will enlist the entry into ongoing transaction
-     * if there is one.
-     *
-     * @param key Key whose mapping is to be removed from cache.
-     * @param val Value to match against currently cached value.
-     * @return Object containing actual old value and success flag.
-     * @throws NullPointerException if the key or value is {@code null}.
-     * @throws IgniteCheckedException If remove failed.
-     */
-    public GridCacheReturn removex(K key, V val) throws IgniteCheckedException;
-
-    /**
-     * Asynchronously removes given key mapping from cache if one exists and value is equal to the passed in value.
-     * <p>
-     * This method will return {@code true} if remove did occur, which means that all optionally
-     * provided filters have passed and there was something to remove, {@code false} otherwise.
-     * <p>
-     * If write-through is enabled, the value will be removed from {@link CacheStore}
-     * via {@link CacheStore#delete(Object)} method.
-     * <h2 class="header">Transactions</h2>
-     * This method is transactional and will enlist the entry into ongoing transaction
-     * if there is one.
-     *
-     * @param key Key whose mapping is to be removed from cache.
-     * @param val Value to match against currently cached value.
-     * @return Future for the remove operation. The future will return object containing actual old value and success
-     *      flag.
-     * @throws NullPointerException if the key or value is {@code null}.
-     */
-    public IgniteInternalFuture<GridCacheReturn> removexAsync(K key, V val);
-
-    /**
      * Gets value from cache. Will go to primary node even if this is a backup.
      *
      * @param key Key to get value for.

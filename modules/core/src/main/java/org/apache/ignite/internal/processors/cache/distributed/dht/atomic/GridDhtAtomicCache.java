@@ -445,7 +445,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     @Override public IgniteInternalFuture<V> getAndPutAsync0(K key, V val, @Nullable CacheEntryPredicate... filter) {
         A.notNull(key, "key");
 
-        return updateAllAsync0(F0.asMap(key, val),
+        return updateAsync0(F0.asMap(key, val),
             null,
             null,
             null,
@@ -462,7 +462,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     @Override public IgniteInternalFuture<Boolean> putAsync0(K key, V val, @Nullable CacheEntryPredicate... filter) {
         A.notNull(key, "key");
 
-        return updateAllAsync0(F0.asMap(key, val),
+        return updateAsync0(F0.asMap(key, val),
             null,
             null,
             null,
@@ -478,7 +478,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     @Override public V tryPutIfAbsent(K key, V val) throws IgniteCheckedException {
         A.notNull(key, "key", val, "val");
 
-        return (V)updateAllAsync0(F0.asMap(key, val),
+        return (V)updateAsync0(F0.asMap(key, val),
             null,
             null,
             null,
@@ -551,27 +551,14 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     }
 
     /** {@inheritDoc} */
-    @Override public GridCacheReturn removex(K key, V val) throws IgniteCheckedException {
-        return removexAsync(key, val).get();
-    }
-
-    /** {@inheritDoc} */
     @Override public GridCacheReturn replacex(K key, V oldVal, V newVal) throws IgniteCheckedException {
         return replacexAsync(key, oldVal, newVal).get();
     }
 
     /** {@inheritDoc} */
     @SuppressWarnings("unchecked")
-    @Override public IgniteInternalFuture<GridCacheReturn> removexAsync(K key, V val) {
-        A.notNull(key, "key", val, "val");
-
-        return removeAllAsync0(F.asList(key), null, true, true, ctx.equalsValArray(val));
-    }
-
-    /** {@inheritDoc} */
-    @SuppressWarnings("unchecked")
     @Override public IgniteInternalFuture<GridCacheReturn> replacexAsync(K key, V oldVal, V newVal) {
-        return updateAllAsync0(F.asMap(key, newVal),
+        return updateAsync0(F.asMap(key, newVal),
             null,
             null,
             null,
@@ -634,7 +621,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     @Override public IgniteInternalFuture<V> getAndRemoveAsync(K key) {
         A.notNull(key, "key");
 
-        return removeAllAsync0(Collections.singletonList(key), null, true, false, CU.empty0());
+        return removeAsync0(key, true, CU.empty0());
     }
 
     /** {@inheritDoc} */
@@ -659,7 +646,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     @Override public IgniteInternalFuture<Boolean> removeAsync(K key, @Nullable CacheEntryPredicate... filter) {
         A.notNull(key, "key");
 
-        return removeAllAsync0(Collections.singletonList(key), null, false, false, filter);
+        return removeAsync0(key, false, filter);
     }
 
     /** {@inheritDoc} */
@@ -793,7 +780,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
 
         final boolean keepBinary = opCtx != null && opCtx.isKeepBinary();
 
-        IgniteInternalFuture<Map<K, EntryProcessorResult<T>>> fut = updateAllAsync0(null,
+        IgniteInternalFuture<Map<K, EntryProcessorResult<T>>> fut = updateAsync0(null,
             invokeMap,
             args,
             null,
@@ -899,6 +886,21 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             TRANSFORM);
     }
 
+    private IgniteInternalFuture updateAsync0(
+        @Nullable Map<? extends K, ? extends V> map,
+        @Nullable Map<? extends K, ? extends EntryProcessor> invokeMap,
+        @Nullable Object[] invokeArgs,
+        @Nullable Map<KeyCacheObject, GridCacheDrInfo> conflictPutMap,
+        @Nullable Map<KeyCacheObject, GridCacheVersion> conflictRmvMap,
+        final boolean retval,
+        final boolean rawRetval,
+        @Nullable final CacheEntryPredicate[] filter,
+        final boolean waitTopFut,
+        final GridCacheOperation op
+    ) {
+        return updateAllAsync0(map, invokeMap, invokeArgs, conflictPutMap, conflictRmvMap, retval, rawRetval, filter, waitTopFut, op);
+    }
+
     /**
      * Entry point for all public API put/transform methods.
      *
@@ -1000,6 +1002,65 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
             opCtx != null && opCtx.isKeepBinary(),
             opCtx != null && opCtx.noRetries() ? 1 : MAX_RETRIES,
             waitTopFut);
+
+        return asyncOp(new CO<IgniteInternalFuture<Object>>() {
+            @Override public IgniteInternalFuture<Object> apply() {
+                updateFut.map();
+
+                return updateFut;
+            }
+        });
+    }
+
+    /**
+     * Entry point for remove with single key.
+     *
+     * @param key Key.
+     * @param retval Whether to return
+     * @param filter Filter.
+     * @return Future.
+     */
+    private IgniteInternalFuture removeAsync0(K key, final boolean retval,
+        @Nullable final CacheEntryPredicate[] filter) {
+        assert ctx.updatesAllowed();
+
+        final boolean statsEnabled = ctx.config().isStatisticsEnabled();
+
+        final long start = statsEnabled ? System.nanoTime() : 0L;
+
+        validateCacheKey(key);
+
+        ctx.checkSecurity(SecurityPermission.CACHE_REMOVE);
+
+        final CacheOperationContext opCtx = ctx.operationContextPerCall();
+
+        UUID subjId = ctx.subjectIdPerCall(null, opCtx);
+
+        int taskNameHash = ctx.kernalContext().job().currentTaskNameHash();
+
+        final GridNearAtomicUpdateFuture updateFut = new GridNearAtomicUpdateFuture(
+            ctx,
+            this,
+            ctx.config().getWriteSynchronizationMode(),
+            DELETE,
+            Collections.singletonList(key),
+            null,
+            null,
+            null,
+            null,
+            retval,
+            false,
+            (filter != null && opCtx != null) ? opCtx.expiry() : null,
+            filter,
+            subjId,
+            taskNameHash,
+            opCtx != null && opCtx.skipStore(),
+            opCtx != null && opCtx.isKeepBinary(),
+            opCtx != null && opCtx.noRetries() ? 1 : MAX_RETRIES,
+            true);
+
+        if (statsEnabled)
+            updateFut.listen(new UpdateRemoveTimeStatClosure<>(metrics0(), start));
 
         return asyncOp(new CO<IgniteInternalFuture<Object>>() {
             @Override public IgniteInternalFuture<Object> apply() {

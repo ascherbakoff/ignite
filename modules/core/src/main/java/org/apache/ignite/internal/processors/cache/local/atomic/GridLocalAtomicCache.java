@@ -281,32 +281,6 @@ public class GridLocalAtomicCache<K, V> extends GridCacheAdapter<K, V> {
 
     /** {@inheritDoc} */
     @SuppressWarnings("unchecked")
-    @Override public GridCacheReturn removex(K key, V val) throws IgniteCheckedException {
-        A.notNull(key, "key", val, "val");
-
-        return (GridCacheReturn)updateAllInternal(DELETE,
-            Collections.singleton(key),
-            null,
-            null,
-            expiryPerCall(),
-            true,
-            true,
-            ctx.equalsValArray(val),
-            ctx.writeThrough(),
-            ctx.readThrough(),
-            ctx.operationContextPerCall().isKeepBinary());
-    }
-
-    /** {@inheritDoc} */
-    @SuppressWarnings("unchecked")
-    @Override public IgniteInternalFuture<GridCacheReturn> removexAsync(K key, V val) {
-        A.notNull(key, "key", val, "val");
-
-        return removeAllAsync0(F.asList(key), true, true, ctx.equalsValArray(val));
-    }
-
-    /** {@inheritDoc} */
-    @SuppressWarnings("unchecked")
     @Override public IgniteInternalFuture<GridCacheReturn> replacexAsync(K key, V oldVal, V newVal) {
         A.notNull(key, "key", oldVal, "oldVal", newVal, "newVal");
 

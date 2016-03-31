@@ -506,19 +506,8 @@ public class GridNearAtomicCache<K, V> extends GridNearCacheAdapter<K, V> {
     }
 
     /** {@inheritDoc} */
-    @Override public GridCacheReturn removex(K key, V val) throws IgniteCheckedException {
-        return dht.removex(key, val);
-    }
-
-    /** {@inheritDoc} */
     @Override public GridCacheReturn replacex(K key, V oldVal, V newVal) throws IgniteCheckedException {
         return dht.replacex(key, oldVal, newVal);
-    }
-
-    /** {@inheritDoc} */
-    @SuppressWarnings("unchecked")
-    @Override public IgniteInternalFuture<GridCacheReturn> removexAsync(K key, V val) {
-        return dht.removexAsync(key, val);
     }
 
     /** {@inheritDoc} */
