@@ -1683,48 +1683,6 @@ public interface IgniteInternalCache<K, V> extends Iterable<Cache.Entry<K, V>> {
     public IgniteInternalFuture<?> removeAllConflictAsync(Map<KeyCacheObject, GridCacheVersion> drMap) throws IgniteCheckedException;
 
     /**
-     * Asynchronously stores given key-value pair in cache only if only if the previous value is equal to the
-     * {@code 'oldVal'} passed in.
-     * <p>
-     * This method will return {@code true} if value is stored in cache and {@code false} otherwise.
-     * <p>
-     * If write-through is enabled, the stored value will be persisted to {@link CacheStore}
-     * via {@link CacheStore#write(javax.cache.Cache.Entry)} method.
-     * <h2 class="header">Transactions</h2>
-     * This method is transactional and will enlist the entry into ongoing transaction
-     * if there is one.
-     *
-     * @param key Key to store in cache.
-     * @param oldVal Old value to match.
-     * @param newVal Value to be associated with the given key.
-     * @return Future for the replace operation. The future will return object containing actual old value and success
-     *      flag.
-     * @throws NullPointerException If either key or value are {@code null}.
-     */
-    public IgniteInternalFuture<GridCacheReturn> replacexAsync(K key, V oldVal, V newVal);
-
-    /**
-     * Stores given key-value pair in cache only if only if the previous value is equal to the
-     * {@code 'oldVal'} passed in.
-     * <p>
-     * This method will return {@code true} if value is stored in cache and {@code false} otherwise.
-     * <p>
-     * If write-through is enabled, the stored value will be persisted to {@link CacheStore}
-     * via {@link CacheStore#write(javax.cache.Cache.Entry)} method.
-     * <h2 class="header">Transactions</h2>
-     * This method is transactional and will enlist the entry into ongoing transaction
-     * if there is one.
-     *
-     * @param key Key to store in cache.
-     * @param oldVal Old value to match.
-     * @param newVal Value to be associated with the given key.
-     * @return Object containing actual old value and success flag.
-     * @throws NullPointerException If either key or value are {@code null}.
-     * @throws IgniteCheckedException If replace operation failed.
-     */
-    public GridCacheReturn replacex(K key, V oldVal, V newVal) throws IgniteCheckedException;
-
-    /**
      * Gets value from cache. Will go to primary node even if this is a backup.
      *
      * @param key Key to get value for.
