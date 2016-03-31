@@ -442,7 +442,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     /** {@inheritDoc} */
     @SuppressWarnings("unchecked")
     @Override public IgniteInternalFuture<V> getAndPutAsync0(K key, V val, @Nullable CacheEntryPredicate... filter) {
-        A.notNull(key, "key");
+        A.notNull(key, "key", val, "val");
 
         return updateAsync0(
             key,
@@ -457,7 +457,7 @@ public class GridDhtAtomicCache<K, V> extends GridDhtCacheAdapter<K, V> {
     /** {@inheritDoc} */
     @SuppressWarnings("unchecked")
     @Override public IgniteInternalFuture<Boolean> putAsync0(K key, V val, @Nullable CacheEntryPredicate... filter) {
-        A.notNull(key, "key");
+        A.notNull(key, "key", val, "val");
 
         return updateAsync0(
             key,
