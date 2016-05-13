@@ -86,6 +86,7 @@
         <module>modules/osgi</module>
         <module>modules/web/ignite-weblogic-test</module>
         <module>modules/flink</module>
+        <module>modules/usercase1</module>
     </modules>
 
     <profiles>

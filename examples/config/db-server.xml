@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+    Copyright (C) GridGain Systems. All Rights Reserved.
+    _________        _____ __________________        _____
+    __  ____/___________(_)______  /__  ____/______ ____(_)_______
+    _  / __  __  ___/__  / _  __  / _  / __  _  __ `/__  / __  __ \
+    / /_/ /  _  /    _  /  / /_/ /  / /_/ /  / /_/ / _  /  _  / / /
+    \____/   /_/     /_/   \_,__/   \____/   \__,_/  /_/   /_/ /_/
+-->
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <bean id="ignite.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
+        <!-- Explicitly configure TCP discovery SPI to provide list of initial nodes. -->
+        <property name="discoverySpi">
+            <bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">
+                <property name="ipFinder">
+                    <!-- Uncomment static IP finder to enable static-based discovery of initial nodes. -->
+                    <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder">
+                    <!--<bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.multicast.TcpDiscoveryMulticastIpFinder">-->
+                        <property name="addresses">
+                            <list>
+                                <!-- In distributed environment, replace with actual host IP address. -->
+                                <value>127.0.0.1:47500..47502</value>
+                            </list>
+                        </property>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+
+        <!--<property name="peerClassLoadingEnabled" value="true"/>-->
+
+        <property name="cacheConfiguration">
+            <list>
+                <!-- Partitioned cache example configuration (Atomic mode). -->
+                <bean class="org.apache.ignite.configuration.CacheConfiguration">
+                    <property name="name" value="deposit"/>
+                    <property name="backups" value="1"/>
+
+                    <property name="rebalanceMode" value="NONE"/>
+                    <property name="writeSynchronizationMode" value="FULL_SYNC"/>
+
+                    <!-- Must use only one key-value type per cache -->
+                    <!--<property name="indexedTypes">-->
+                        <!--<list>-->
+                            <!--<value>java.lang.Integer</value>-->
+                            <!--<value>org.gridgain.examples.db.Organization</value>-->
+                        <!--</list>-->
+                    <!--</property>-->
+
+                    <property name="queryEntities">
+                        <list>
+                            <bean class="org.apache.ignite.cache.QueryEntity">
+                                <property name="valueType" value="Deposit" />
+                                <property name="keyType" value="java.lang.String" />
+                                <property name="fields">
+                                    <map>
+                                        <entry key="ID"					value="java.lang.String" />
+                                        <entry key="OFFICE"				value="java.lang.Integer" />
+                                        <entry key="CURRENCY"			value="java.lang.Integer" />
+                                        <entry key="KIND"				value="java.lang.Integer" />
+                                        <entry key="SUBKIND"			value="java.lang.Integer" />
+                                        <entry key="ACCOUNT"			value="java.lang.Integer" />
+                                        <entry key="OPENDAY"			value="java.util.Date" />
+                                        <entry key="PROLONGDAY"			value="java.util.Date" />
+                                        <entry key="STATE"				value="java.lang.Integer" />
+                                        <entry key="ADDSTATE"			value="java.lang.Integer" />
+                                        <entry key="UNSEENOPCNT"		value="java.lang.Integer" />
+                                        <entry key="SBOOKLINENO"		value="java.lang.Integer" />
+                                        <entry key="LEGACY"				value="java.lang.Double" />
+                                        <entry key="OPENCASH"			value="java.lang.Double" />
+                                        <entry key="ASSMINBALANCE"		value="java.lang.Double" />
+                                        <entry key="EXPMINBALANCE"		value="java.lang.Double" />
+                                        <entry key="TERMSOK"			value="java.lang.Integer" />
+                                        <entry key="OPNO"				value="java.lang.Integer" />
+                                        <entry key="OPDAY"				value="java.util.Date" />
+                                        <entry key="OPTRANSDAY"			value="java.util.Date" />
+                                        <entry key="BALANCE"			value="java.lang.Double" />
+                                        <entry key="BALANCEF"			value="java.lang.Double" />
+                                        <entry key="INTEREST"			value="java.lang.Double" />
+                                        <entry key="INTERESTF"			value="java.lang.Double" />
+                                        <entry key="OPKIND"				value="java.lang.Integer" />
+                                        <entry key="OPCASH"				value="java.lang.Double" />
+                                        <entry key="TXOPCNT"			value="java.lang.Integer" />
+                                        <entry key="TXBRANCHNO"			value="java.lang.Integer" />
+                                        <entry key="TXOFFICE"			value="java.lang.Integer" />
+                                        <entry key="TXCLERK"			value="java.lang.Integer" />
+                                        <entry key="RESIDENT"			value="java.lang.Integer" />
+                                        <entry key="LASTVISITDAY"		value="java.util.Date" />
+                                        <entry key="ARRESTBALANCE"		value="java.lang.Double" />
+                                        <entry key="PAYROLLDAY"			value="java.util.Date" />
+                                        <entry key="V_SERV"				value="java.lang.Integer" />
+                                        <entry key="OFFCASHBALANCE"		value="java.lang.Double" />
+                                        <entry key="OPENKIND"			value="java.lang.Integer" />
+                                        <entry key="EXPIRATIONDAY"		value="java.util.Date" />
+                                        <entry key="CAPYEAR"			value="java.lang.Integer" />
+                                        <entry key="P39DAY"				value="java.util.Date" />
+                                        <entry key="P39CASH"			value="java.lang.Double" />
+                                        <entry key="P39CASHPREV"		value="java.lang.Double" />
+                                        <entry key="P39DAYPREV"			value="java.util.Date" />
+                                        <entry key="CASHSOURCE"			value="java.lang.Integer" />
+                                        <entry key="LASTOPNO"			value="java.lang.Integer" />
+                                        <entry key="DUPSBOOKNO"			value="java.lang.Integer" />
+                                        <entry key="CAPITALDAY"			value="java.util.Date" />
+                                        <entry key="OVERDRAFT"			value="java.lang.Double" />
+                                        <entry key="PERSON_ID"			value="java.lang.String" />
+                                        <entry key="LASTKEYKIND"		value="java.lang.Integer" />
+                                        <entry key="LASTKEY_ID"			value="java.lang.String" />
+                                        <entry key="BRANCHNO"			value="java.lang.Integer" />
+                                        <entry key="RSVDEPO_ID"			value="java.lang.String" />
+                                        <entry key="TERM"				value="java.lang.Integer" />
+                                        <entry key="PASSWORDNO"			value="java.lang.Integer" />
+                                        <entry key="DIRTY"				value="java.lang.Integer" />
+                                        <entry key="OVERDRAFTINT"		value="java.lang.Double" />
+                                        <entry key="OFFCASHBALANCEB"	value="java.lang.Double" />
+                                        <entry key="CLIENTKIND"			value="java.lang.Integer" />
+                                        <entry key="MBRANCHALLOWED"		value="java.lang.Integer" />
+                                        <entry key="MBRANCHDEFAULT"		value="java.lang.Integer" />
+                                        <entry key="EXPROVERDRAFT"		value="java.lang.Double" />
+                                        <entry key="EXPROVERDRAFTINT"	value="java.lang.Double" />
+                                        <entry key="ALONEOPNO"			value="java.lang.Integer" />
+                                        <entry key="BOOKINGCASH"		value="java.lang.Double" />
+                                        <entry key="DEBTFLAG"			value="java.lang.Integer" />
+                                        <entry key="ALLHISTFLAG"		value="java.lang.Integer" />
+                                        <entry key="SUBSCRIBERS"		value="java.lang.Integer" />
+                                        <entry key="DEPOFLAGS"			value="java.lang.Integer" />
+                                        <entry key="DEPOSITRATE"		value="java.lang.Double" />
+                                        <entry key="PARTRATE"			value="java.lang.Integer" />
+                                        <entry key="PRCCAPSROK"			value="java.lang.Double" />
+                                        <entry key="PERMFLAGS"			value="java.lang.Integer" />
+                                        <entry key="FIRSTTWODAY"		value="java.util.Date" />
+                                        <entry key="DESCRIPTION"		value="java.util.String" />
+                                    </map>
+                                </property>
+                                <property name="indexes">
+                                    <list>
+                                        <bean class="org.apache.ignite.cache.QueryIndex">
+                                            <constructor-arg value="ID"/>
+                                        </bean>
+                                        <bean class="org.apache.ignite.cache.QueryIndex">
+                                            <constructor-arg value="PERSON_ID"/>
+                                        </bean>
+                                        <bean class="org.apache.ignite.cache.QueryIndex">
+                                            <constructor-arg value="LASTKEY_ID"/>
+                                        </bean>
+                                        <bean class="org.apache.ignite.cache.QueryIndex">
+                                            <constructor-arg value="RSVDEPO_ID"/>
+                                        </bean>
+                                    </list>
+                                </property>
+                            </bean>
+                        </list>
+                    </property>
+                </bean>
+            </list>
+        </property>
+
+        <!--<property name="binaryConfiguration">-->
+            <!--<bean class="org.apache.ignite.configuration.BinaryConfiguration">-->
+                <!--<property name="compactFooter" value="false"/>-->
+            <!--</bean>-->
+        <!--</property>-->
+
+        <!--<property name="databaseConfiguration">-->
+            <!--<bean class="org.apache.ignite.configuration.DatabaseConfiguration">-->
+                <!--&lt;!&ndash; Set page memory size to 300 MB. &ndash;&gt;-->
+                <!--<property name="pageCacheSize" value="#{300 * 1024L * 1024L}"/>-->
+                <!--&lt;!&ndash; Enable persistence. &ndash;&gt;-->
+                <!--<property name="persistenceEnabled" value="true"/>-->
+            <!--</bean>-->
+        <!--</property>-->
+    </bean>
+</beans>
