@@ -18,10 +18,16 @@
 package org.apache.ignite.examples.events;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteCache;
 import org.apache.ignite.IgniteException;
 import org.apache.ignite.Ignition;
+import org.apache.ignite.cache.CacheMemoryMode;
+import org.apache.ignite.cache.eviction.fifo.FifoEvictionPolicy;
 import org.apache.ignite.compute.ComputeTaskSession;
+import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.events.CacheEvent;
 import org.apache.ignite.events.TaskEvent;
 import org.apache.ignite.examples.ExampleNodeStartup;
 import org.apache.ignite.lang.IgniteBiPredicate;
@@ -29,7 +35,7 @@ import org.apache.ignite.lang.IgnitePredicate;
 import org.apache.ignite.lang.IgniteRunnable;
 import org.apache.ignite.resources.TaskSessionResource;
 
-import static org.apache.ignite.events.EventType.EVTS_TASK_EXECUTION;
+import static org.apache.ignite.events.EventType.*;
 
 /**
  * Demonstrates event consume API that allows to register event listeners on remote nodes.
@@ -42,6 +48,8 @@ import static org.apache.ignite.events.EventType.EVTS_TASK_EXECUTION;
  * node with {@code examples/config/example-ignite.xml} configuration.
  */
 public class EventsExample {
+    static AtomicInteger counter = new AtomicInteger();
+
     /**
      * Executes example.
      *
@@ -53,14 +61,37 @@ public class EventsExample {
             System.out.println();
             System.out.println(">>> Events API example started.");
 
+            IgnitePredicate<CacheEvent> lsnr = new IgnitePredicate<CacheEvent>() {
+                @Override public boolean apply(CacheEvent evt) {
+                    System.out.println("Old value: " + evt.oldValue());
+                    counter.incrementAndGet();
+                    return true; // Return true to continue listening.
+                }
+            };
+
+            CacheConfiguration<Object, Object> cfg = new CacheConfiguration<>();
+            cfg.setMemoryMode(CacheMemoryMode.OFFHEAP_TIERED);
+            cfg.setEvictionPolicy(new FifoEvictionPolicy<>(1));
+            IgniteCache<Object, Object> test = ignite.getOrCreateCache(cfg);
+
+            // Register event listener for all local task execution events.
+            ignite.events().localListen(lsnr, EVT_CACHE_ENTRY_EVICTED);
+
+            test.put("1", "1");
+            test.put("2", "2");
+            test.put("3", "3");
+            Object o = test.get("2");
+
+            System.out.println(counter.get());
+
             // Listen to events happening on local node.
-            localListen();
+            //localListen();
 
             // Listen to events happening on all cluster nodes.
-            remoteListen();
+            //remoteListen();
 
             // Wait for a while while callback is notified about remaining puts.
-            Thread.sleep(1000);
+            //Thread.sleep(1000);
         }
     }
 

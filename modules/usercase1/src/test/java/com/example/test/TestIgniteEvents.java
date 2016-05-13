@@ -32,7 +32,7 @@ public class TestIgniteEvents {
     public void setup() throws IgniteCheckedException {
         IgnitePredicate<CacheEvent> locLsnr = (CacheEvent evt) -> {
 //            System.out.println("got event "+evt);
-            if (evt.oldValue() != null) count.incrementAndGet();
+            count.incrementAndGet();
             return true; // Continue listening.
         };
 
@@ -60,14 +60,14 @@ public class TestIgniteEvents {
 
     @Test
     public void testEvictionEventsWithValues() throws InterruptedException {
-        CacheConfiguration<String, String> cfg = new CacheConfiguration<>();
-        cfg.setName("USERS");
-        final IgniteCache<String, String> cache = client.getOrCreateCache(cfg);
+        final IgniteCache<String, String> cache = client.cache("USERS");
 
         //put 100 users into the cache
         IntStream.range(0,100).forEach(value -> cache.put("key - "+value, "value - "+value));
 
         //make sure they are in the cache
+        IntStream.range(0,100).forEach(value -> Assert.assertEquals("value - "+value, cache.get("key - "+value)));
+        IntStream.range(0,100).forEach(value -> Assert.assertEquals("value - "+value, cache.get("key - "+value)));
         IntStream.range(0,100).forEach(value -> Assert.assertEquals("value - "+value, cache.get("key - "+value)));
 
         Assert.assertEquals(0, count.get());

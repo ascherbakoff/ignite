@@ -13,13 +13,13 @@
                     <property name="atomicityMode" value="ATOMIC"/>
                     <property name="name" value="USERS"/>
                     <property name="backups" value="0"/>
-                    <property name="memoryMode" value="ONHEAP_TIERED"/>
+                    <property name="memoryMode" value="OFFHEAP_TIERED"/>
                     <!--<property name="offHeapMaxMemory" value="#{2 * 1024 * 1024 }"/>-->
 
                     <property name="evictionPolicy">
                         <!-- LRU eviction policy. -->
                         <bean class="org.apache.ignite.cache.eviction.fifo.FifoEvictionPolicy">
-                            <property name="maxSize" value="1"/>
+                            <property name="maxSize" value="100"/>
                         </bean>
                     </property>
                 </bean>
