@@ -18,7 +18,11 @@
 package org.apache.ignite.examples.events;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.cache.configuration.FactoryBuilder;
+import javax.cache.expiry.CreatedExpiryPolicy;
+import javax.cache.expiry.Duration;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
 import org.apache.ignite.IgniteException;
@@ -70,19 +74,20 @@ public class EventsExample {
             };
 
             CacheConfiguration<Object, Object> cfg = new CacheConfiguration<>();
-            cfg.setMemoryMode(CacheMemoryMode.OFFHEAP_TIERED);
-            cfg.setEvictionPolicy(new FifoEvictionPolicy<>(1));
+            cfg.setMemoryMode(CacheMemoryMode.ONHEAP_TIERED);
+            cfg.setExpiryPolicyFactory(FactoryBuilder.factoryOf(new CreatedExpiryPolicy(new Duration(TimeUnit.SECONDS, 1))));
+            cfg.setEagerTtl(true);
+            //cfg.setOffHeapMaxMemory(0);
             IgniteCache<Object, Object> test = ignite.getOrCreateCache(cfg);
 
             // Register event listener for all local task execution events.
-            ignite.events().localListen(lsnr, EVT_CACHE_ENTRY_EVICTED);
+            ignite.events().localListen(lsnr, EVT_CACHE_OBJECT_EXPIRED);
 
             test.put("1", "1");
             test.put("2", "2");
             test.put("3", "3");
-            Object o = test.get("2");
 
-            System.out.println(counter.get());
+            Thread.sleep(10000);
 
             // Listen to events happening on local node.
             //localListen();
