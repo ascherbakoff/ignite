@@ -35,7 +35,7 @@ import org.apache.ignite.cache.query.SqlFieldsQuery;
  * folders, you should delete the {@code IGNITE_HOME/work/db} folder. Note also that in order for the results to be
  * persisted correctly, GridGain server nodes should be shut down gracefully.
  */
-public class DbExample2 {
+public class DbExamplePutAll {
     /** */
     private static final boolean UPDATE = true;
 
