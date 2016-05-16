@@ -1,6 +1,7 @@
 import org.apache.ignite.Ignite;
 import org.apache.ignite.Ignition;
 import org.apache.ignite.events.DiscoveryEvent;
+import org.apache.ignite.events.Event;
 import org.apache.ignite.events.EventType;
 import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgnitePredicate;
@@ -30,6 +31,13 @@ public class ClientNode {
             ignite.events(ignite.cluster().forServers()).remoteListen(localListener, remListener,
                 EventType.EVT_NODE_FAILED, EventType.EVT_NODE_LEFT, EventType.EVT_NODE_SEGMENTED, EventType.EVT_NODE_JOINED);
 
+//            ignite.events().localListen(new IgnitePredicate<DiscoveryEvent>() {
+//                @Override public boolean apply(DiscoveryEvent event) {
+//                    System.out.println("\"++Local discovery event node:  " +  event.type() + " " + event.eventNode());
+//                    return true;
+//                }
+//            }, EventType.EVT_NODE_LEFT);
+
 
 //        } finally {
 //            log.info("Clisent Stop!!!");
@@ -40,19 +48,8 @@ public class ClientNode {
         return new IgniteBiPredicate<UUID,DiscoveryEvent>() {
             @Override
             public boolean apply(UUID uuid, DiscoveryEvent event) {
-                System.out.println("\"++Local discovery event type:  " +  event.type());
-                System.out.println("\"++Local discovery event node:  " +  event.eventNode());
-                if (event.type()==(EventType.EVT_NODE_FAILED) || event.type()==(EventType.EVT_NODE_LEFT)
-                    || event.type()==(EventType.EVT_NODE_SEGMENTED)|| event.type()==(EventType.EVT_NODE_JOINED)) {
-                    event.eventNode().addresses();
-                    for (String addr: event.eventNode().addresses()) {
-                        // Инвалидирем кэши
-                        System.out.println("\"++Local discovery event:  " +  event.eventNode());
-
-                    };
-                    return  true;
-                }
-                return false;
+                System.out.println("\"++Local discovery event node:  " +  event.type() + " " + event.eventNode());
+                return true;
             }
         };
     }
@@ -60,12 +57,8 @@ public class ClientNode {
     private static class RemoteDiscoveryEventFilter implements IgnitePredicate<DiscoveryEvent> {
 
         @Override public boolean apply(DiscoveryEvent event) {
-            System.out.println("++Remote discovery event type:  " +  event.type());
-            System.out.println("++Remote discovery event: " + event);
-            if (event.type()==(EventType.EVT_NODE_FAILED) || event.type()==(EventType.EVT_NODE_LEFT)
-                || event.type()==(EventType.EVT_NODE_SEGMENTED)|| event.type()==(EventType.EVT_NODE_JOINED))
-                return  true;
-            return false;
+            System.out.println("++Remote discovery event node:  " +  event.type() + " " + event.eventNode());
+            return true;
         }
 
     }
