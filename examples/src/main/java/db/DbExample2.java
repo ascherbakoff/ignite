@@ -72,9 +72,14 @@ public class DbExample2 {
 
                         if (i > 0 && i % 10_000 == 0) {
                             double secs = (System.nanoTime() - t1) / 1000 / 1000 / 1000.;
-                            System.out.println("Done: " + i + " time(sec):" + secs + " op/sec:" + 10_000 / secs);
+                            System.out.println("Done: " + i + " time(sec):" + secs + " op/sec:" + Math.round(10_000 / secs * 1000 ) / 1000.);
                             t1 = System.nanoTime();
                         }
+                    }
+
+                    if (data.size() > 0) {
+                        cache.putAll(data);
+                        data.clear();
                     }
                 }
 

@@ -42,6 +42,7 @@
                     <property name="backups" value="1"/>
 
                     <property name="rebalanceMode" value="NONE"/>
+                    <property name="memoryMode" value="OFFHEAP_TIERED"/>
                     <property name="writeSynchronizationMode" value="FULL_SYNC"/>
 
                     <!-- Must use only one key-value type per cache -->
