@@ -30,29 +30,6 @@
 
     <bean id="ignite.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
         <!-- Set to true to enable distributed class loading for examples, default is false. -->
-        <property name="peerClassLoadingEnabled" value="true"/>
-
-        <property name="deploymentMode" value="CONTINUOUS"/>
-
-        <property name="metricsLogFrequency" value="6000000" />
-
-        <!-- Enable task execution events for examples. -->
-        <property name="includeEventTypes">
-            <list>
-                <util:constant static-field="org.apache.ignite.events.EventType.EVT_NODE_JOINED"/>
-                <util:constant static-field="org.apache.ignite.events.EventType.EVT_NODE_LEFT"/>
-                <util:constant static-field="org.apache.ignite.events.EventType.EVT_NODE_FAILED"/>
-                <util:constant static-field="org.apache.ignite.events.EventType.EVT_NODE_SEGMENTED"/>
-            </list>
-        </property>
-
-        <property name="communicationSpi">
-            <bean class="org.apache.ignite.spi.communication.tcp.TcpCommunicationSpi">
-                <property name="sharedMemoryPort" value="-1" />
-            </bean>
-        </property>
-
-        <property name="segmentationPolicy" value="NOOP"/>
 
         <!-- Explicitly configure TCP discovery SPI to provide list of initial nodes. -->
         <property name="discoverySpi">
@@ -79,41 +56,46 @@
 
         <property name="cacheConfiguration">
             <list>
-                <ref bean="simple" />
+                <bean class="org.apache.ignite.configuration.CacheConfiguration">
+                    <property name="name" value="activity"/>
+                    <property name="indexedTypes">
+                        <list>
+                            <value>ActivityKey</value>
+                            <value>Activity</value>
+                        </list>
+                    </property>
+                </bean>
 
-                <!--<ref bean="query" />-->
+                <bean class="org.apache.ignite.configuration.CacheConfiguration">
+                    <property name="name" value="activityhistory"/>
+                    <property name="indexedTypes">
+                        <list>
+                            <value>ActivityhistoryKey</value>
+                            <value>Activityhistory</value>
+                        </list>
+                    </property>
+                </bean>
+
+                <bean class="org.apache.ignite.configuration.CacheConfiguration">
+                    <property name="name" value="activityhistoryuseraccount"/>
+                    <property name="indexedTypes">
+                        <list>
+                            <value>ActivityhistoryuseraccountKey</value>
+                            <value>Activityhistoryuseraccount</value>
+                        </list>
+                    </property>
+                </bean>
+
+                <bean class="org.apache.ignite.configuration.CacheConfiguration">
+                    <property name="name" value="activityuseraccountrole"/>
+                    <property name="indexedTypes">
+                        <list>
+                            <value>ActivityuseraccountroleKey</value>
+                            <value>Activityuseraccountrole</value>
+                        </list>
+                    </property>
+                </bean>
             </list>
         </property>
     </bean>
-
-    <bean name="simple" class="org.apache.ignite.configuration.CacheConfiguration">
-        <!-- Set a cache name. -->
-        <property name="name" value="CHACHE_NAME"/>
-
-        <!-- Set cache mode. -->
-        <property name="cacheMode" value="PARTITIONED"/>
-
-        <!-- Number of backup nodes. -->
-        <!--<property name="backups" value="1"/>-->
-
-    </bean>
-
-    <bean name="query" class="org.apache.ignite.configuration.CacheConfiguration">
-        <property name="name" value="query"/>
-
-        <!--<property name="statisticsEnabled" value="true"/>-->
-
-        <!--<property name="indexedTypes">-->
-            <!--<list>-->
-                <!--<value>java.lang.String</value>-->
-                <!--<value>com.gridgain.test.model.AuthToken</value>-->
-            <!--</list>-->
-        <!--</property>-->
-
-        <property name="memoryMode" value="OFFHEAP_TIERED"/>
-
-        <property name="offHeapMaxMemory" value="#{4 * 1024 * 1024 * 1024}"/>
-
-    </bean>
-
 </beans>
