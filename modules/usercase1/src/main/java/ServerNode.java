@@ -15,33 +15,56 @@
  * limitations under the License.
  */
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
+import org.apache.ignite.IgniteCheckedException;
 import org.apache.ignite.Ignition;
+import org.apache.ignite.binary.BinaryObject;
+import org.apache.ignite.binary.BinaryObjectException;
+import org.apache.ignite.binary.BinaryType;
 import org.apache.ignite.cache.query.QueryCursor;
 import org.apache.ignite.cache.query.SqlFieldsQuery;
+import org.apache.ignite.configuration.BinaryConfiguration;
+import org.apache.ignite.configuration.IgniteConfiguration;
+import org.apache.ignite.internal.MarshallerContextImpl;
+import org.apache.ignite.internal.binary.BinaryCachingMetadataHandler;
+import org.apache.ignite.internal.binary.BinaryContext;
+import org.apache.ignite.internal.binary.BinaryMarshaller;
+import org.apache.ignite.internal.binary.BinaryMetadataHandler;
+import org.apache.ignite.internal.binary.BinaryNoopMetadataHandler;
+import org.apache.ignite.internal.binary.BinaryObjectImpl;
+import org.apache.ignite.internal.binary.GridBinaryMarshaller;
+import org.apache.ignite.internal.binary.builder.BinaryObjectBuilderImpl;
+import org.apache.ignite.internal.processors.platform.utils.PlatformUtils;
+import org.apache.ignite.internal.util.IgniteUtils;
+import org.apache.ignite.logger.NullLogger;
 
 /**
  *
  */
 public class ServerNode {
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws InterruptedException, IgniteCheckedException {
         try(Ignite ignite = Ignition.start("example-ignite.xml")) {
             IgniteCache<ActivityKey, Activity> activity = ignite.cache("activity");
 
-            SqlFieldsQuery qry = new SqlFieldsQuery("explain SELECT activity0.* FROM activity activity0\n" +
-                "LEFT OUTER JOIN \"activityhistory\".activityhistory activityhistory0 ON activityhistory0.activityhistoryId = activity0.lastactivityId\n" +
-                "LEFT OUTER JOIN \"activityuseraccountrole\".activityuseraccountrole activityuseraccountrole0 ON activityuseraccountrole0.activityId = activity0.activityId\n" +
-                "LEFT OUTER JOIN \"activityhistoryuseraccount\".activityhistoryuseraccount activityhistoryuseraccount0 ON activityhistoryuseraccount0.activityHistoryId = activityhistory0.activityhistoryId\n" +
+            SqlFieldsQuery qry = new SqlFieldsQuery("EXPLAIN ANALYZE SELECT DISTINCT * FROM activity activity0\n" +
+                "LEFT OUTER JOIN \"activityuseraccountrole\".activityuseraccountrole activityuseraccountrole0\n" +
+                "ON activityuseraccountrole0.activityId = activity0.activityId\n" +
+                "AND activityuseraccountrole0.useraccountroleId IN (1, 3)\n" +
+                "\n" +
+                "LEFT OUTER JOIN \"activityhistory\".activityhistory activityhistory0\n" +
+                "ON activityhistory0.activityhistoryId = activity0.lastactivityId\n" +
+                "AND activityhistory0.activitystateEnumid NOT IN (37, 30, 463, 33, 464)\n" +
+                "\n" +
+                "LEFT OUTER JOIN \"activityhistoryuseraccount\".activityhistoryuseraccount activityhistoryuseraccount0\n" +
+                "ON activityhistoryuseraccount0.activityHistoryId = activityhistory0.activityhistoryId\n" +
+                "\n" +
                 "WHERE activity0.kernelId IS NULL\n" +
                 "AND activity0.realizationId IS NULL\n" +
-                "AND NOT activityhistory0.activitystateEnumid IN (37, 30, 463, 33, 464)\n" +
-                "AND (\n" +
-                "(activityuseraccountrole0.useraccountroleId IN (1, 3) AND (activity0.removefromworklist = 0 OR activityhistoryuseraccount0.userAccountId IS NULL))\n" +
-                "OR activityhistoryuseraccount0.useraccountId = 600301\n" +
-                ")");
-            qry.setLocal(true);
+                "AND activity0.removefromworklist = 0");
             QueryCursor<List<?>> query = activity.query(qry);
             System.out.println(query.getAll());
         };

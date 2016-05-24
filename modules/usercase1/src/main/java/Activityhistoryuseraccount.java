@@ -29,11 +29,11 @@ public class Activityhistoryuseraccount implements Serializable {
     private static final long serialVersionUID = 0L;
 
     /** Value for useraccountId. */
-    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activityhistoryuseraccount_idx", order = 0)})
+    @QuerySqlField()
     private long useraccountId;
 
     /** Value for activityhistoryId. */
-    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activityhistoryuseraccount_idx", order = 1)})
+    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activityhistoryuseraccount_idx", order = 0)})
     private long activityhistoryId;
 
     /**

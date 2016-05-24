@@ -42,11 +42,11 @@ public class Activity implements Serializable {
     private Long activitytypeId;
 
     /** Value for realizationId. */
-    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activity_idx", order = 1)})
+    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activity_cond_idx", order = 1)})
     private Long realizationId;
 
     /** Value for kernelId. */
-    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activity_idx", order = 2)})
+    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activity_cond_idx", order = 0)})
     private Long kernelId;
 
     /** Value for predecessortypeEnumid. */
@@ -89,7 +89,7 @@ public class Activity implements Serializable {
     private java.sql.Date estimenddate;
 
     /** Value for removefromworklist. */
-    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activity_idx", order = 3)})
+    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activity_cond_idx", order = 2)})
     private boolean removefromworklist;
 
     /** Value for sequencenr. */
@@ -99,7 +99,7 @@ public class Activity implements Serializable {
     private Long sessionId;
 
     /** Value for lastactivityId. */
-    @QuerySqlField(orderedGroups={@QuerySqlField.Group(name = "Activity_idx", order = 4)})
+    @QuerySqlField()
     private Long lastactivityId;
 
     /** Value for sysrepoperationId. */
