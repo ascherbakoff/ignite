@@ -144,6 +144,19 @@
                 </dependency>
 
                 <dependency>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                    <version>1.0.13</version>
+                </dependency>
+
+                <!-- http://mvnrepository.com/artifact/com.typesafe.scala-logging/scala-logging_2.11 -->
+                <dependency>
+                    <groupId>com.typesafe.scala-logging</groupId>
+                    <artifactId>scala-logging_2.11</artifactId>
+                    <version>3.1.0</version>
+                </dependency>
+
+                <dependency>
                     <groupId>org.scalatest</groupId>
                     <artifactId>scalatest_2.11</artifactId>
                     <version>2.2.4</version>

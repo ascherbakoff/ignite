@@ -15,7 +15,7 @@ import scala.util.{Failure, Success, Try}
 object FastMain extends App with LoggerInitializer with StrictLogging {
   logger.info("Start client")
 
-  val config = Try(IgniteClientConfig("configs/application.conf")) match {
+  val config = Try(IgniteClientConfig("C:\\work\\ignite\\examples\\src\\main\\resources\\configs\\application.conf")) match {
     case Success(configuration) => configuration
     case Failure(exception) =>
       logger.error("Config parse error", exception)

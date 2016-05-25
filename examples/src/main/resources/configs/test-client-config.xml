@@ -24,7 +24,7 @@
                         <property name="addresses">
                             <list>
                                 <!--<value>200.60.98.53:47500..47510</value>-->
-                                <value>10.116.134.206:47500..47510</value>
+                                <value>127.0.0.1:47500..47510</value>
                             </list>
                         </property>
                     </bean>
@@ -32,21 +32,21 @@
             </bean>
         </property>
 
-        <property name="communicationSpi">
-            <bean class="org.apache.ignite.spi.communication.tcp.TcpCommunicationSpi">
-                <property name="sharedMemoryPort" value="-1"/>
-                <property name="socketSendBuffer" value="48000"/>
-            </bean>
-        </property>
+        <!--<property name="communicationSpi">-->
+            <!--<bean class="org.apache.ignite.spi.communication.tcp.TcpCommunicationSpi">-->
+                <!--<property name="sharedMemoryPort" value="-1"/>-->
+                <!--<property name="socketSendBuffer" value="48000"/>-->
+            <!--</bean>-->
+        <!--</property>-->
 
-        <property name="sslContextFactory">
-            <bean class="org.apache.ignite.ssl.SslContextFactory">
-                <property name="keyStoreFilePath" value="ssl/esbmon.jks"/>
-                <property name="keyStorePassword" value="qwe123"/>
-                <property name="trustStoreFilePath" value="ssl/esbmon.jks"/>
-                <property name="trustStorePassword" value="qwe123"/>
-            </bean>
-        </property>
+        <!--<property name="sslContextFactory">-->
+            <!--<bean class="org.apache.ignite.ssl.SslContextFactory">-->
+                <!--<property name="keyStoreFilePath" value="ssl/esbmon.jks"/>-->
+                <!--<property name="keyStorePassword" value="qwe123"/>-->
+                <!--<property name="trustStoreFilePath" value="ssl/esbmon.jks"/>-->
+                <!--<property name="trustStorePassword" value="qwe123"/>-->
+            <!--</bean>-->
+        <!--</property>-->
 
     </bean>
 </beans>
