@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+    http://www.springframework.org/schema/util
+    http://www.springframework.org/schema/util/spring-util-2.5.xsd">
+    <bean id="ignite.cfg" class="org.apache.ignite.configuration.IgniteConfiguration">
+
+        <property name="gridName" value="ESB_MON_GRID"/>
+
+        <!-- Enable peer class loading -->
+        <property name="peerClassLoadingEnabled" value="false"/>
+
+        <property name="clientMode" value="true"/>
+
+        <!-- Ipcast -->
+        <property name="discoverySpi">
+            <bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">
+                <property name="ipFinder">
+
+                    <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder">
+                        <property name="addresses">
+                            <list>
+                                <!--<value>200.60.98.53:47500..47510</value>-->
+                                <value>10.116.134.206:47500..47510</value>
+                            </list>
+                        </property>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+
+        <property name="communicationSpi">
+            <bean class="org.apache.ignite.spi.communication.tcp.TcpCommunicationSpi">
+                <property name="sharedMemoryPort" value="-1"/>
+                <property name="socketSendBuffer" value="48000"/>
+            </bean>
+        </property>
+
+        <property name="sslContextFactory">
+            <bean class="org.apache.ignite.ssl.SslContextFactory">
+                <property name="keyStoreFilePath" value="ssl/esbmon.jks"/>
+                <property name="keyStorePassword" value="qwe123"/>
+                <property name="trustStoreFilePath" value="ssl/esbmon.jks"/>
+                <property name="trustStorePassword" value="qwe123"/>
+            </bean>
+        </property>
+
+    </bean>
+</beans>
