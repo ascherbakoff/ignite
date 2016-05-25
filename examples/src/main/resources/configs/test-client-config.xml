@@ -13,7 +13,7 @@
         <!-- Enable peer class loading -->
         <property name="peerClassLoadingEnabled" value="false"/>
 
-        <property name="clientMode" value="true"/>
+        <!--<property name="clientMode" value="true"/>-->
 
         <!-- Ipcast -->
         <property name="discoverySpi">
