@@ -49,24 +49,50 @@ public class ServerNode {
     public static void main(String[] args) throws InterruptedException, IgniteCheckedException {
         try(Ignite ignite = Ignition.start("example-ignite.xml")) {
             IgniteCache<ActivityKey, Activity> activity = ignite.cache("activity");
+            IgniteCache<ActivityuseraccountroleKey, Activityuseraccountrole> role = ignite.cache("activityuseraccountrole");
 
-            SqlFieldsQuery qry = new SqlFieldsQuery("EXPLAIN ANALYZE SELECT DISTINCT * FROM activity activity0\n" +
-                "LEFT OUTER JOIN \"activityuseraccountrole\".activityuseraccountrole activityuseraccountrole0\n" +
-                "ON activityuseraccountrole0.activityId = activity0.activityId\n" +
-                "AND activityuseraccountrole0.useraccountroleId IN (1, 3)\n" +
-                "\n" +
-                "LEFT OUTER JOIN \"activityhistory\".activityhistory activityhistory0\n" +
-                "ON activityhistory0.activityhistoryId = activity0.lastactivityId\n" +
-                "AND activityhistory0.activitystateEnumid NOT IN (37, 30, 463, 33, 464)\n" +
-                "\n" +
-                "LEFT OUTER JOIN \"activityhistoryuseraccount\".activityhistoryuseraccount activityhistoryuseraccount0\n" +
-                "ON activityhistoryuseraccount0.activityHistoryId = activityhistory0.activityhistoryId\n" +
-                "\n" +
-                "WHERE activity0.kernelId IS NULL\n" +
-                "AND activity0.realizationId IS NULL\n" +
-                "AND activity0.removefromworklist = 0");
-            QueryCursor<List<?>> query = activity.query(qry);
-            System.out.println(query.getAll());
+            for (int i = 1; i <= 100_000; i++ ) {
+                ActivityKey key = new ActivityKey();
+                key.setActivityId(i);
+                Activity val = new Activity();
+                val.setActivityId(i);
+                val.setDescription("test" + i);
+                activity.put(key, val);
+
+                if ( i % 10_000 == 0 )
+                    System.out.println("processed: " + i);
+
+                for (int j = 1; j <= 10; j++ ) {
+                    Activityuseraccountrole r1 = new Activityuseraccountrole();
+                    r1.setActivityId(i);
+                    r1.setUseraccountroleId(j);
+                    ActivityuseraccountroleKey key1 = new ActivityuseraccountroleKey();
+                    key1.setActivityId(i);
+                    key1.setUseraccountroleId(j);
+                    role.put(key1, r1);
+                }
+            }
+
+
+//            SqlFieldsQuery qry = new SqlFieldsQuery("EXPLAIN ANALYZE SELECT DISTINCT * FROM activity activity0\n" +
+//                "LEFT OUTER JOIN \"activityuseraccountrole\".activityuseraccountrole activityuseraccountrole0\n" +
+//                "ON activityuseraccountrole0.activityId = activity0.activityId\n" +
+//                "AND activityuseraccountrole0.useraccountroleId IN (1, 3)\n" +
+//                "\n" +
+//                "LEFT OUTER JOIN \"activityhistory\".activityhistory activityhistory0\n" +
+//                "ON activityhistory0.activityhistoryId = activity0.lastactivityId\n" +
+//                "AND activityhistory0.activitystateEnumid NOT IN (37, 30, 463, 33, 464)\n" +
+//                "\n" +
+//                "LEFT OUTER JOIN \"activityhistoryuseraccount\".activityhistoryuseraccount activityhistoryuseraccount0\n" +
+//                "ON activityhistoryuseraccount0.activityHistoryId = activityhistory0.activityhistoryId\n" +
+//                "\n" +
+//                "WHERE activity0.kernelId IS NULL\n" +
+//                "AND activity0.realizationId IS NULL\n" +
+//                "AND activity0.removefromworklist = 0");
+//            QueryCursor<List<?>> query = activity.query(qry);
+//            System.out.println(query.getAll());
+
+            Thread.sleep(1000000000L);
         };
     }
 
