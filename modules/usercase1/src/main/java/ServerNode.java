@@ -74,22 +74,37 @@ public class ServerNode {
             }
 
 
-//            SqlFieldsQuery qry = new SqlFieldsQuery("EXPLAIN ANALYZE SELECT DISTINCT * FROM activity activity0\n" +
-//                "LEFT OUTER JOIN \"activityuseraccountrole\".activityuseraccountrole activityuseraccountrole0\n" +
-//                "ON activityuseraccountrole0.activityId = activity0.activityId\n" +
-//                "AND activityuseraccountrole0.useraccountroleId IN (1, 3)\n" +
-//                "\n" +
-//                "LEFT OUTER JOIN \"activityhistory\".activityhistory activityhistory0\n" +
-//                "ON activityhistory0.activityhistoryId = activity0.lastactivityId\n" +
-//                "AND activityhistory0.activitystateEnumid NOT IN (37, 30, 463, 33, 464)\n" +
-//                "\n" +
-//                "LEFT OUTER JOIN \"activityhistoryuseraccount\".activityhistoryuseraccount activityhistoryuseraccount0\n" +
-//                "ON activityhistoryuseraccount0.activityHistoryId = activityhistory0.activityhistoryId\n" +
-//                "\n" +
-//                "WHERE activity0.kernelId IS NULL\n" +
-//                "AND activity0.realizationId IS NULL\n" +
-//                "AND activity0.removefromworklist = 0");
-//            QueryCursor<List<?>> query = activity.query(qry);
+            SqlFieldsQuery qry = new SqlFieldsQuery("SELECT * FROM \"activity\".activity activity0\n" +
+                "LEFT OUTER JOIN \"activityuseraccountrole\".activityuseraccountrole activityuseraccountrole0\n" +
+                "ON activityuseraccountrole0.activityId = activity0.activityId\n" +
+                "\n" +
+                "LEFT OUTER JOIN \"activityhistory\".activityhistory activityhistory0\n" +
+                "ON activityhistory0.activityhistoryId = activity0.lastactivityId\n" +
+                "AND NOT activityhistory0.activitystateEnumid IN (37, 30, 463, 33, 464)\n" +
+                "\n" +
+                "LEFT OUTER JOIN \"activityhistoryuseraccount\".activityhistoryuseraccount activityhistoryuseraccount0\n" +
+                "ON activityhistoryuseraccount0.activityHistoryId = activityhistory0.activityhistoryId\n" +
+                "AND activityuseraccountrole0.useraccountroleId IN (1, 3)\n" +
+                "\n" +
+                "WHERE activity0.kernelId IS NULL\n" +
+                "AND activity0.realizationId IS NULL\n" +
+                "AND activity0.removefromworklist = 0");
+            long t1 = System.nanoTime();
+            QueryCursor<List<?>> query = activity.query(qry);
+            int c = 0;
+            for (List<?> rows : query) {
+                c += rows.size();
+            }
+            System.out.println("Time(ms): " + (System.nanoTime()-t1)/1000/1000.);
+
+            t1 = System.nanoTime();
+            query = activity.query(qry);
+            c = 0;
+            for (List<?> rows : query) {
+                c += rows.size();
+            }
+            System.out.println("Time(ms): " + (System.nanoTime()-t1)/1000/1000.);
+
 //            System.out.println(query.getAll());
 
             Thread.sleep(1000000000L);
