@@ -27,6 +27,7 @@ import org.apache.ignite.cache.eviction.EvictableEntry;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.distributed.GridDistributedLockCancelledException;
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtLocalPartition;
+import org.apache.ignite.internal.processors.cache.distributed.dht.atomic.GridDhtAtomicUpdateFuture;
 import org.apache.ignite.internal.processors.cache.transactions.IgniteInternalTx;
 import org.apache.ignite.internal.processors.cache.transactions.IgniteTxKey;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
@@ -145,10 +146,11 @@ public interface GridCacheEntryEx {
 
     /**
      * Wraps entry to an entry with lazy value get.
+     * @param keepBinary Keep binary flag.
      *
      * @return Entry.
      */
-    public <K, V> Cache.Entry<K, V> wrapLazyValue();
+    public <K, V> Cache.Entry<K, V> wrapLazyValue(boolean keepBinary);
 
     /**
      * Peeks value provided to public API entries and to entry filters.
@@ -462,6 +464,7 @@ public interface GridCacheEntryEx {
      * @param subjId Subject ID initiated this update.
      * @param taskName Task name.
      * @param updateCntr Update counter.
+     * @param fut Dht atomic future.
      * @return Tuple where first value is flag showing whether operation succeeded,
      *      second value is old entry value if return value is requested, third is updated entry value,
      *      fourth is the version to enqueue for deferred delete the fifth is DR conflict context
@@ -497,7 +500,8 @@ public interface GridCacheEntryEx {
         @Nullable UUID subjId,
         String taskName,
         @Nullable CacheObject prevVal,
-        @Nullable Long updateCntr
+        @Nullable Long updateCntr,
+        @Nullable GridDhtAtomicUpdateFuture fut
     ) throws IgniteCheckedException, GridCacheEntryRemovedException;
 
     /**
@@ -907,9 +911,10 @@ public interface GridCacheEntryEx {
      * Callback from ttl processor to cache entry indicating that entry is expired.
      *
      * @param obsoleteVer Version to set obsolete if entry is expired.
-     * @return {@code True} if this entry was obsolete or became obsolete as a result of this call.
+     * @throws GridCacheEntryRemovedException If entry was removed.
+     * @return {@code True} if this entry was expired as a result of this call.
      */
-    public boolean onTtlExpired(GridCacheVersion obsoleteVer);
+    public boolean onTtlExpired(GridCacheVersion obsoleteVer) throws GridCacheEntryRemovedException;
 
     /**
      * @return Time to live, without accounting for transactions or removals.

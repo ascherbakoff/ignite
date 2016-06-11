@@ -401,6 +401,23 @@ public class Ignition {
         }
     }
 
+
+    /**
+     * Gets or starts new grid instance if it hasn't been started yet.
+     *
+     * @param cfg Grid configuration. This cannot be {@code null}.
+     * @return Grid instance.
+     * @throws IgniteException If grid could not be started.
+     */
+    public static Ignite getOrStart(IgniteConfiguration cfg) throws IgniteException {
+        try {
+            return IgnitionEx.start(cfg, false);
+        }
+        catch (IgniteCheckedException e) {
+            throw U.convertException(e);
+        }
+    }
+
     /**
      * Loads Spring bean by its name from given Spring XML configuration file. If bean
      * with such name doesn't exist, exception is thrown.

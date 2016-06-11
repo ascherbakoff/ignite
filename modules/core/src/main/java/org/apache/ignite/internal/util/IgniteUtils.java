@@ -149,6 +149,8 @@ import org.apache.ignite.IgniteException;
 import org.apache.ignite.IgniteInterruptedException;
 import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.IgniteSystemProperties;
+import org.apache.ignite.binary.BinaryRawReader;
+import org.apache.ignite.binary.BinaryRawWriter;
 import org.apache.ignite.cluster.ClusterGroupEmptyException;
 import org.apache.ignite.cluster.ClusterMetrics;
 import org.apache.ignite.cluster.ClusterNode;
@@ -215,6 +217,7 @@ import org.apache.ignite.spi.IgniteSpi;
 import org.apache.ignite.spi.IgniteSpiException;
 import org.apache.ignite.spi.discovery.DiscoverySpi;
 import org.apache.ignite.spi.discovery.DiscoverySpiOrderSupport;
+import org.apache.ignite.transactions.TransactionDeadlockException;
 import org.apache.ignite.transactions.TransactionHeuristicException;
 import org.apache.ignite.transactions.TransactionOptimisticException;
 import org.apache.ignite.transactions.TransactionRollbackException;
@@ -808,6 +811,9 @@ public abstract class IgniteUtils {
 
         m.put(IgniteTxTimeoutCheckedException.class, new C1<IgniteCheckedException, IgniteException>() {
             @Override public IgniteException apply(IgniteCheckedException e) {
+                if (e.getCause() instanceof TransactionDeadlockException)
+                    return new TransactionTimeoutException(e.getMessage(), e.getCause());
+
                 return new TransactionTimeoutException(e.getMessage(), e);
             }
         });
@@ -4719,6 +4725,44 @@ public abstract class IgniteUtils {
     }
 
     /**
+     * Writes UUID to binary writer.
+     *
+     * @param out Output Binary writer.
+     * @param uid UUID to write.
+     * @throws IOException If write failed.
+     */
+    public static void writeUuid(BinaryRawWriter out, UUID uid) {
+        // Write null flag.
+        if (uid != null) {
+            out.writeBoolean(true);
+
+            out.writeLong(uid.getMostSignificantBits());
+            out.writeLong(uid.getLeastSignificantBits());
+        }
+        else
+            out.writeBoolean(false);
+    }
+
+    /**
+     * Reads UUID from binary reader.
+     *
+     * @param in Binary reader.
+     * @return Read UUID.
+     * @throws IOException If read failed.
+     */
+    @Nullable public static UUID readUuid(BinaryRawReader in) {
+        // If UUID is not null.
+        if (in.readBoolean()) {
+            long most = in.readLong();
+            long least = in.readLong();
+
+            return new UUID(most, least);
+        }
+        else
+            return null;
+    }
+
+    /**
      * Writes {@link org.apache.ignite.lang.IgniteUuid} to output stream. This method is meant to be used by
      * implementations of {@link Externalizable} interface.
      *
@@ -6523,7 +6567,7 @@ public abstract class IgniteUtils {
      * @return Short string representing the node.
      */
     public static String toShortString(ClusterNode n) {
-        return "GridNode [id=" + n.id() + ", order=" + n.order() + ", addr=" + n.addresses() +
+        return "ClusterNode [id=" + n.id() + ", order=" + n.order() + ", addr=" + n.addresses() +
             ", daemon=" + n.isDaemon() + ']';
     }
 
@@ -8228,7 +8272,11 @@ public abstract class IgniteUtils {
         if (cls != null)
             return cls;
 
-        if (ldr == null)
+        if (ldr != null) {
+            if (ldr instanceof ClassCache)
+                return ((ClassCache)ldr).getFromCache(clsName);
+        }
+        else
             ldr = gridClassLoader;
 
         ConcurrentMap<String, Class> ldrMap = classCache.get(ldr);
@@ -9252,12 +9300,13 @@ public abstract class IgniteUtils {
      * @param name Name of a field to get.
      * @return Field or {@code null}.
      */
-    @Nullable public static Field findNonPublicField(Class<?> cls, String name) {
+    @Nullable public static Field findField(Class<?> cls, String name) {
         while (cls != null) {
             try {
                 Field fld = cls.getDeclaredField(name);
 
-                fld.setAccessible(true);
+                if (!fld.isAccessible())
+                    fld.setAccessible(true);
 
                 return fld;
             }
