@@ -16,18 +16,22 @@
  */
 package org.apache.ignite.cache;
 
+import org.apache.ignite.binary.*;
+
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.LinkedHashMap;
+import java.util.*;
 
 /**
- * Contains list of fields to be indexed. It is possible to provide field name
- * suffixed with index specific extension, for example for {@link QueryIndexType#SORTED sorted} index
- * the list can be provided as following {@code (id, name asc, age desc)}.
+ * Contains list of fields to be indexed. It is possible to provide field name suffixed with index specific extension,
+ * for example for {@link QueryIndexType#SORTED sorted} index the list can be provided as following {@code (id, name
+ * asc, age desc)}.
  */
 @SuppressWarnings("TypeMayBeWeakened")
 public class QueryIndex implements Serializable {
+    interface BinaryIndexer<T> {
+        void write(T o, SortedBinaryWriter w);
+    }
+
     /** */
     private static final long serialVersionUID = 0L;
 
@@ -36,6 +40,9 @@ public class QueryIndex implements Serializable {
 
     /** */
     private LinkedHashMap<String, Boolean> fields;
+
+    /** */
+    private Map<Class<?>, BinaryIndexer<?>> indexers;
 
     /** */
     private QueryIndexType type;
@@ -80,10 +87,8 @@ public class QueryIndex implements Serializable {
     }
 
     /**
-     * Creates index for one field.
-     * If index is sorted, then ascending sorting is used by default.
-     * To specify sort order, use the next method.
-     * This constructor should also have a corresponding setter method.
+     * Creates index for one field. If index is sorted, then ascending sorting is used by default. To specify sort
+     * order, use the next method. This constructor should also have a corresponding setter method.
      *
      * @param field Field name.
      * @param type Index type.
@@ -123,8 +128,7 @@ public class QueryIndex implements Serializable {
     }
 
     /**
-     * Creates index for a collection of fields. If index is sorted, fields will be sorted in
-     * ascending order.
+     * Creates index for a collection of fields. If index is sorted, fields will be sorted in ascending order.
      *
      * @param fields Collection of fields to create an index.
      * @param type Index type.
@@ -139,8 +143,8 @@ public class QueryIndex implements Serializable {
     }
 
     /**
-     * Creates index for a collection of fields. The order of fields in the created index will be the same
-     * as iteration order in the passed map. Map value defines whether the index will be ascending.
+     * Creates index for a collection of fields. The order of fields in the created index will be the same as iteration
+     * order in the passed map. Map value defines whether the index will be ascending.
      *
      * @param fields Field name to field sort direction for sorted indexes.
      * @param type Index type.
@@ -194,8 +198,8 @@ public class QueryIndex implements Serializable {
     }
 
     /**
-     * Sets a collection of field names altogether with the field sorting direction. Sorting direction will be
-     * ignored for non-sorted indexes.
+     * Sets a collection of field names altogether with the field sorting direction. Sorting direction will be ignored
+     * for non-sorted indexes.
      *
      * @param fields Collection of fields.
      * @param asc Ascending flag.
@@ -223,5 +227,19 @@ public class QueryIndex implements Serializable {
      */
     public void setIndexType(QueryIndexType type) {
         this.type = type;
+    }
+
+    /**
+     * @return Indexers.
+     */
+    public Map<Class<?>, BinaryIndexer<?>> indexers() {
+        return indexers;
+    }
+
+    /**
+     * @param indexers New indexers.
+     */
+    public void indexers(Map<Class<?>, BinaryIndexer<?>> indexers) {
+        this.indexers = indexers;
     }
 }
