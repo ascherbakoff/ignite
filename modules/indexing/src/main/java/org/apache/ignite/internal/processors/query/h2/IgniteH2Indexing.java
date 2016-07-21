@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.cache.Cache;
 import javax.cache.CacheException;
 import org.apache.ignite.IgniteCheckedException;
@@ -99,6 +100,7 @@ import org.apache.ignite.internal.processors.timeout.GridTimeoutProcessor;
 import org.apache.ignite.internal.util.GridBoundedConcurrentLinkedHashMap;
 import org.apache.ignite.internal.util.GridEmptyCloseableIterator;
 import org.apache.ignite.internal.util.GridSpinBusyLock;
+import org.apache.ignite.internal.util.lang.GridAbsClosure;
 import org.apache.ignite.internal.util.lang.GridCloseableIterator;
 import org.apache.ignite.internal.util.offheap.unsafe.GridUnsafeGuard;
 import org.apache.ignite.internal.util.offheap.unsafe.GridUnsafeMemory;
@@ -735,7 +737,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
         try {
             Connection conn = connectionForThread(schema(spaceName));
 
-            ResultSet rs = executeSqlQueryWithTimer(spaceName, conn, qry, params, true);
+            ResultSet rs = executeSqlQueryWithTimer(spaceName, conn, qry, params, true, null);
 
             List<GridQueryFieldMetadata> meta = null;
 
@@ -814,12 +816,14 @@ public class IgniteH2Indexing implements GridQueryIndexing {
      * @param sql Sql query.
      * @param params Parameters.
      * @param useStmtCache If {@code true} uses statement cache.
+     * @param cancel Reference to cancellation closure.
      * @return Result.
      * @throws IgniteCheckedException If failed.
      */
-    private ResultSet executeSqlQuery(Connection conn, String sql, Collection<Object> params, boolean useStmtCache)
+    private ResultSet executeSqlQuery(Connection conn, String sql, Collection<Object> params, boolean useStmtCache,
+        @Nullable AtomicReference<GridAbsClosure> cancel)
         throws IgniteCheckedException {
-        PreparedStatement stmt;
+        final PreparedStatement stmt;
 
         try {
             stmt = prepareStatement(conn, sql, useStmtCache);
@@ -841,9 +845,26 @@ public class IgniteH2Indexing implements GridQueryIndexing {
         bindParameters(stmt, params);
 
         try {
+            if (cancel != null) {
+                if (!cancel.compareAndSet(null, new GridAbsClosure() {
+                    @Override public void apply() {
+                        try {
+                            stmt.cancel();
+                        }
+                        catch (SQLException e) {
+                            throw new IgniteException("Failed to cancel the statement.", e);
+                        }
+                    }
+                }))
+                    throw new SQLException("Query was already cancelled.");
+            }
+
             return stmt.executeQuery();
         }
         catch (SQLException e) {
+            if (e.getMessage().contains("Statement was canceled or the session timed out"))
+                throw new QueryCancelledException();
+
             throw new IgniteCheckedException("Failed to execute SQL query.", e);
         }
     }
@@ -856,6 +877,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
      * @param sql Sql query.
      * @param params Parameters.
      * @param useStmtCache If {@code true} uses statement cache.
+     * @param cancel Reference to cancellation closure.
      * @return Result.
      * @throws IgniteCheckedException If failed.
      */
@@ -863,11 +885,12 @@ public class IgniteH2Indexing implements GridQueryIndexing {
         Connection conn,
         String sql,
         @Nullable Collection<Object> params,
-        boolean useStmtCache) throws IgniteCheckedException {
+        boolean useStmtCache,
+        @Nullable AtomicReference<GridAbsClosure> cancel) throws IgniteCheckedException {
         long start = U.currentTimeMillis();
 
         try {
-            ResultSet rs = executeSqlQuery(conn, sql, params, useStmtCache);
+            ResultSet rs = executeSqlQuery(conn, sql, params, useStmtCache, cancel);
 
             long time = U.currentTimeMillis() - start;
 
@@ -876,7 +899,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
             if (time > longQryExecTimeout) {
                 String msg = "Query execution is too long (" + time + " ms): " + sql;
 
-                ResultSet plan = executeSqlQuery(conn, "EXPLAIN " + sql, params, false);
+                ResultSet plan = executeSqlQuery(conn, "EXPLAIN " + sql, params, false, null);
 
                 plan.next();
 
@@ -906,13 +929,14 @@ public class IgniteH2Indexing implements GridQueryIndexing {
      * @return Result set.
      * @throws IgniteCheckedException If failed.
      */
-    private ResultSet executeQuery(String space, String qry, @Nullable Collection<Object> params, TableDescriptor tbl)
+    private ResultSet executeQuery(String space, String qry, @Nullable Collection<Object> params, TableDescriptor tbl,
+        @Nullable AtomicReference<GridAbsClosure> cancel)
             throws IgniteCheckedException {
         Connection conn = connectionForThread(tbl.schemaName());
 
         String sql = generateQuery(qry, tbl);
 
-        return executeSqlQueryWithTimer(space, conn, sql, params, true);
+        return executeSqlQueryWithTimer(space, conn, sql, params, true, cancel);
     }
 
     /**
@@ -954,9 +978,20 @@ public class IgniteH2Indexing implements GridQueryIndexing {
         setFilters(filters);
 
         try {
-            ResultSet rs = executeQuery(spaceName, qry, params, tbl);
+            final AtomicReference<GridAbsClosure> cancel = new AtomicReference<>();
 
-            return new KeyValIterator(rs);
+            ResultSet rs = executeQuery(spaceName, qry, params, tbl, cancel);
+
+            return new KeyValIterator<K, V>(rs) {
+                @Override public void onClose() throws IgniteCheckedException {
+                    GridAbsClosure clo = cancel.get();
+
+                    if (cancel.compareAndSet(clo, F.noop()) && clo != null)
+                        clo.apply();
+
+                    super.onClose();
+                }
+            };
         }
         finally {
             setFilters(null);
@@ -966,9 +1001,18 @@ public class IgniteH2Indexing implements GridQueryIndexing {
     /** {@inheritDoc} */
     @Override public Iterable<List<?>> queryTwoStep(final GridCacheContext<?,?> cctx, final GridCacheTwoStepQuery qry,
         final boolean keepCacheObj) {
+        return queryTwoStep(cctx, qry, keepCacheObj, null, null);
+    }
+
+    /** {@inheritDoc} */
+    @Override public Iterable<List<?>> queryTwoStep(final GridCacheContext<?, ?> cctx, final GridCacheTwoStepQuery qry,
+        final boolean keepCacheObj,
+        final AtomicReference<GridAbsClosure> mapQrysCancel,
+        final AtomicReference<GridAbsClosure> rdcQryCancel) {
         return new Iterable<List<?>>() {
             @Override public Iterator<List<?>> iterator() {
-                return rdcQryExec.query(cctx, qry, keepCacheObj);
+                return rdcQryExec.query(cctx,
+                    qry, keepCacheObj, mapQrysCancel, rdcQryCancel);
             }
         };
     }
@@ -1104,7 +1148,13 @@ public class IgniteH2Indexing implements GridQueryIndexing {
 
         twoStepQry.pageSize(qry.getPageSize());
 
-        QueryCursorImpl<List<?>> cursor = new QueryCursorImpl<>(queryTwoStep(cctx, twoStepQry, cctx.keepBinary()));
+        AtomicReference<GridAbsClosure> mapQrysCancel = new AtomicReference<>();
+        AtomicReference<GridAbsClosure> rdcQryCancel = new AtomicReference<>();
+
+        QueryCursorImpl<List<?>> cursor = new QueryCursorImpl<>(
+            queryTwoStep(cctx, twoStepQry, cctx.keepBinary(), mapQrysCancel, rdcQryCancel),
+            mapQrysCancel,
+            rdcQryCancel);
 
         cursor.fieldsMeta(meta);
 
