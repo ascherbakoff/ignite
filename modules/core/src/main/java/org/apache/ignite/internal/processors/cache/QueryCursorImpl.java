@@ -130,7 +130,7 @@ public class QueryCursorImpl<T> implements QueryCursorEx<T> {
         } else {
             GridAbsClosure clo;
             if (mapQrysCancel != null) {
-                // Make sure we use correct closure for map cancellation.
+                // Make sure we use correct closure.
                 while(true) {
                     clo = mapQrysCancel.get();
 
@@ -145,7 +145,7 @@ public class QueryCursorImpl<T> implements QueryCursorEx<T> {
             if (rdcQryCancel != null) {
                 clo = rdcQryCancel.get();
 
-                if (rdcQryCancel.compareAndSet(clo, F.noop()) && clo != null)
+                if (clo != null && rdcQryCancel.compareAndSet(clo, F.noop()))
                     clo.apply();
             }
         }

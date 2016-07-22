@@ -33,7 +33,6 @@ import org.apache.ignite.internal.IgniteEx;
 import org.apache.ignite.internal.processors.cache.IgniteCacheAbstractQuerySelfTest;
 import org.apache.ignite.internal.processors.query.h2.IgniteH2Indexing;
 import org.apache.ignite.internal.processors.query.h2.QueryCancelledException;
-import org.apache.ignite.internal.util.IgniteUtils;
 import org.apache.ignite.internal.util.typedef.internal.U;
 
 import static org.apache.ignite.cache.CacheMode.PARTITIONED;
@@ -44,16 +43,16 @@ import static org.apache.ignite.cache.CachePeekMode.ALL;
  */
 public class IgniteCacheQueryStopSelfTest extends IgniteCacheAbstractQuerySelfTest {
     /** */
-    private static final String KEY_CROSS_JOIN_QRY = "select a._key, b._key from String a, String b";
+    private static final String QUERY_1 = "select a._key, b._key from String a, String b";
 
     /** */
-    private static final String GROUP_QRY = "select a._key, count(*) from String a group by a._key";
+    private static final String QUERY_2 = "select a._key, count(*) from String a group by a._key";
 
     /** */
-    private static final String VAL_CROSS_JOIN_QRY = "select a._val, b._val from String a, String b";
+    private static final String QUERY_3 = "select a._val, b._val from String a, String b";
 
     /** */
-    private static final String SIMPLE_QRY = "select a._key from String a";
+    private static final String QUERY_4 = "select a._key from String a";
 
     /** {@inheritDoc} */
     @Override protected int gridCount() {
@@ -65,81 +64,61 @@ public class IgniteCacheQueryStopSelfTest extends IgniteCacheAbstractQuerySelfTe
         return PARTITIONED;
     }
 
-    /**
-     * Tests stopping two-step long query on timeout.
-     */
-    public void testRemoteQueryExecutionTimeout() throws Exception {
-        testQueryTimeout(10_000, 4, KEY_CROSS_JOIN_QRY, 3);
-    }
+    /** */
+//    public void testRemoteQueryExecutionTimeout() throws Exception {
+//        testQueryTimeout(10_000, 4, QUERY_1, 3);
+//    }
 
     /**
      * Tests stopping two-step long query while result set is being generated on remote nodes.
      */
     public void testRemoteQueryExecutionCancel1() throws Exception {
-        testQueryCancel(10_000, 4, KEY_CROSS_JOIN_QRY, 500);
+        testQueryCancel(10_000, 4, QUERY_1, 500);
     }
 
-    /**
-     * Tests stopping two-step long query while result set is being generated on remote nodes.
-     */
+    /** */
     public void testRemoteQueryExecutionCancel2() throws Exception {
-        testQueryCancel(10_000, 4, KEY_CROSS_JOIN_QRY, 1000);
+        testQueryCancel(10_000, 4, QUERY_1, 1000);
     }
 
-    /**
-     * Tests stopping two-step long query while result set is being generated on remote nodes.
-     */
+    /** */
     public void testRemoteQueryExecutionCancel3() throws Exception {
-        testQueryCancel(10_000, 4, KEY_CROSS_JOIN_QRY, 3000);
+        testQueryCancel(10_000, 4, QUERY_1, 3000);
     }
 
-    /**
-     * Tests stopping two step query while reducing.
-     */
-    public void testRemoteQueryReducingCancel1() throws Exception {
-        testQueryCancel(100_000, 4, GROUP_QRY, 500);
+    /** */
+    public void testRemoteQueryWithMergeTableCancel1() throws Exception {
+        testQueryCancel(100_000, 4, QUERY_2, 500);
     }
 
-    /**
-     * Tests stopping two step query while reducing.
-     */
-    public void testRemoteQueryReducingCancel2() throws Exception {
-        testQueryCancel(100_000, 4, GROUP_QRY, 1_500);
+    /** */
+    public void testRemoteQueryWithMergeTableCancel2() throws Exception {
+        testQueryCancel(100_000, 4, QUERY_2, 1_500);
     }
 
-    /**
-     * Tests stopping two step query while reducing.
-     */
-    public void testRemoteQueryReducingCancel3() throws Exception {
-        testQueryCancel(100_000, 4, GROUP_QRY, 3_000);
+    /** */
+    public void testRemoteQueryWithMergeTableCancel3() throws Exception {
+        testQueryCancel(100_000, 4, QUERY_2, 3_000);
     }
 
-    /**
-     * Tests stopping two step query while fetching data from remote nodes.
-     */
-    public void testRemoteQueryFetchngCancel1() throws Exception {
-        testQueryCancel(100_000, 512, VAL_CROSS_JOIN_QRY, 500);
+    /** */
+    public void testRemoteQueryWithoutMergeTableCancel1() throws Exception {
+        testQueryCancel(100_000, 512, QUERY_3, 500);
     }
 
-    /**
-     * Tests stopping two step query while fetching data from remote nodes.
-     */
-    public void testRemoteQueryFetchngCancel2() throws Exception {
-        testQueryCancel(100_000, 512, VAL_CROSS_JOIN_QRY, 1_500);
+    /** */
+    public void testRemoteQueryWithoutMergeTableCancel2() throws Exception {
+        testQueryCancel(100_000, 512, QUERY_3, 1_500);
     }
 
-    /**
-     * Tests stopping two step query while fetching data from remote nodes.
-     */
-    public void testRemoteQueryFetchngCancel3() throws Exception {
-        testQueryCancel(100_000, 512, VAL_CROSS_JOIN_QRY, 3000);
+    /** */
+    public void testRemoteQueryWithoutMergeTableCancel3() throws Exception {
+        testQueryCancel(100_000, 512, QUERY_3, 3000);
     }
 
-    /**
-     * Tests stopping two step query after it was finished.
-     */
+    /** */
     public void testRemoteQueryAlreadyFinishedStop() throws Exception {
-        testQueryCancel(100, 4, SIMPLE_QRY, 3000);
+        testQueryCancel(100, 4, QUERY_4, 3000);
     }
 
     /**
@@ -152,10 +131,18 @@ public class IgniteCacheQueryStopSelfTest extends IgniteCacheAbstractQuerySelfTe
 
             assertEquals(0, cache.localSize());
 
+            int p = 1;
             for (int i = 0; i < keyCnt; i++) {
                 char[] tmp = new char[valSize];
                 Arrays.fill(tmp, ' ');
                 cache.put(i, new String(tmp));
+
+                if ((i+1)/(float)keyCnt >= p/10f) {
+                    log().info("Loaded " + (i+1) + " of " + keyCnt);
+
+                    p++;
+                }
+
             }
 
             assertEquals(0, cache.localSize());
@@ -173,7 +160,6 @@ public class IgniteCacheQueryStopSelfTest extends IgniteCacheAbstractQuerySelfTe
             }, cancelTimeout, TimeUnit.MILLISECONDS);
 
             try {
-                // Trigger distributed execution.
                 cursor.iterator();
             }
             catch (CacheException ex) {

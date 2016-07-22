@@ -568,6 +568,8 @@ public class GridMapQueryExecutor {
 
         assert res != null;
 
+        System.out.println("P: " + res.page);
+
         int page = res.page;
 
         List<Value[]> rows = new ArrayList<>(Math.min(64, pageSize));
@@ -716,7 +718,7 @@ public class GridMapQueryExecutor {
                 if (cancel != null) {
                     GridAbsClosure clo = cancel.get();
 
-                    if (cancel.compareAndSet(clo, F.noop()))
+                    if (clo != null && cancel.compareAndSet(clo, F.noop()))
                         clo.apply();
                 }
             }

@@ -846,7 +846,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
 
         try {
             if (cancel != null) {
-                if (!cancel.compareAndSet(null, new GridAbsClosure() {
+                if (cancel.get() == F.noop() || !cancel.compareAndSet(null, new GridAbsClosure() {
                     @Override public void apply() {
                         try {
                             stmt.cancel();
@@ -856,10 +856,15 @@ public class IgniteH2Indexing implements GridQueryIndexing {
                         }
                     }
                 }))
-                    throw new SQLException("Query was already cancelled.");
+                    throw new QueryCancelledException();
             }
 
-            return stmt.executeQuery();
+            ResultSet rs = stmt.executeQuery();
+
+            if (cancel != null) // Prevent leaks.
+                cancel.set(F.noop());
+
+            return rs;
         }
         catch (SQLException e) {
             if (e.getMessage().contains("Statement was canceled or the session timed out"))
@@ -1001,7 +1006,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
     /** {@inheritDoc} */
     @Override public Iterable<List<?>> queryTwoStep(final GridCacheContext<?,?> cctx, final GridCacheTwoStepQuery qry,
         final boolean keepCacheObj) {
-        return queryTwoStep(cctx, qry, keepCacheObj, null, null);
+        return queryTwoStep(cctx, qry, keepCacheObj, new AtomicReference<GridAbsClosure>(), new AtomicReference<GridAbsClosure>());
     }
 
     /** {@inheritDoc} */

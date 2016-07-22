@@ -74,7 +74,6 @@ import org.apache.ignite.internal.processors.query.h2.twostep.messages.GridQuery
 import org.apache.ignite.internal.processors.query.h2.twostep.messages.GridQueryRequest;
 import org.apache.ignite.internal.util.GridSpinBusyLock;
 import org.apache.ignite.internal.util.lang.GridAbsClosure;
-import org.apache.ignite.internal.util.lang.GridFilteredIterator;
 import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteFuture;
@@ -580,8 +579,7 @@ public class GridReduceQueryExecutor {
                         mapQry.marshallParams(m);
                 }
 
-                // Set map queries cancellation closure for current attempt.
-                if (!mapQrysCancel.compareAndSet(clo, new GridAbsClosure() {
+                if (!mapQrysCancel.compareAndSet(clo, new GridAbsClosure() { // Update cancellation for current attempt.
                     @Override public void apply() {
                         send(finalNodes, new GridQueryCancelRequest(qryReqId), null);
                     }
@@ -593,8 +591,6 @@ public class GridReduceQueryExecutor {
                 if (send(nodes,
                     new GridQueryRequest(qryReqId, r.pageSize, space, mapQrys, topVer, extraSpaces, null), partsMap)) {
                     awaitAllReplies(r, nodes);
-
-                    mapQrysCancel.set(F.noop()); // Disable map queries cancellation at this point.
 
                     Object state = r.state.get();
 
@@ -650,6 +646,8 @@ public class GridReduceQueryExecutor {
                             res.add(resRow);
                         }
 
+                        mapQrysCancel.set(F.noop()); // Prevent leaks.
+
                         resIter = res.iterator();
                     }
                     else {
@@ -663,18 +661,14 @@ public class GridReduceQueryExecutor {
                             false,
                             reduceQryCancel);
 
+                        mapQrysCancel.set(F.noop()); // Prevent leaks.
+
                         resIter = new Iter(res);
                     }
                 }
 
-                if (clo != F.noop()) // No need for explicit cancellation if a closure was already called.
-                    for (GridMergeIndex idx : r.idxs) {
-                        if (!idx.fetchedAll()) { // We have to explicitly cancel queries on remote nodes.
-                            send(nodes, new GridQueryCancelRequest(qryReqId), null);
-
-                            break;
-                        }
-                    }
+                if (clo != F.noop()) // Do explicit cancellation if it wasn't cancelled before.
+                    cancelRemoteQueries(nodes, r, qryReqId);
 
                 if (retry) {
                     if (Thread.currentThread().isInterrupted())
@@ -714,6 +708,22 @@ public class GridReduceQueryExecutor {
                     for (int i = 0, mapQrys = qry.mapQueries().size(); i < mapQrys; i++)
                         fakeTable(null, i).setInnerTable(null); // Drop all merge tables.
                 }
+            }
+        }
+    }
+
+    /**
+     * Explicitly cancels remote queries.
+     * @param nodes Nodes.
+     * @param r Query run.
+     * @param qryReqId Query id.
+     */
+    private void cancelRemoteQueries(Collection<ClusterNode> nodes, QueryRun r, long qryReqId) {
+        for (GridMergeIndex idx : r.idxs) {
+            if (!idx.fetchedAll()) {
+                send(nodes, new GridQueryCancelRequest(qryReqId), null);
+
+                break;
             }
         }
     }
