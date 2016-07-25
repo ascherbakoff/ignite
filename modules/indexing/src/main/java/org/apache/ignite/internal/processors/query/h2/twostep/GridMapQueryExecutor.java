@@ -463,6 +463,7 @@ public class GridMapQueryExecutor {
                     qry.query(),
                     F.asList(qry.parameters()),
                     true,
+                    req.timeout(),
                     cancel);
 
                 if (ctx.event().isRecordable(EVT_CACHE_QUERY_EXECUTED)) {
@@ -567,8 +568,6 @@ public class GridMapQueryExecutor {
         QueryResult res = qr.result(qry);
 
         assert res != null;
-
-        System.out.println("P: " + res.page);
 
         int page = res.page;
 

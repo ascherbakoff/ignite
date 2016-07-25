@@ -451,12 +451,14 @@ public class GridReduceQueryExecutor {
      * @param cctx Cache context.
      * @param qry Query.
      * @param keepBinary Keep binary.
+     * @param timeoutMillis Timeout in milliseconds.
      * @param mapQrysCancel Used to cancel map queries.
      * @param reduceQryCancel Used to cancel reduce query.
      * @return Cursor.
      */
     public Iterator<List<?>> query(GridCacheContext<?,?> cctx, GridCacheTwoStepQuery qry, boolean keepBinary,
-        final AtomicReference<GridAbsClosure> mapQrysCancel, AtomicReference<GridAbsClosure> reduceQryCancel) {
+        int timeoutMillis, AtomicReference<GridAbsClosure> mapQrysCancel,
+        AtomicReference<GridAbsClosure> reduceQryCancel) {
         for (int attempt = 0;; attempt++) {
             if (attempt != 0) {
                 try {
@@ -589,8 +591,10 @@ public class GridReduceQueryExecutor {
                 boolean retry = false;
 
                 if (send(nodes,
-                    new GridQueryRequest(qryReqId, r.pageSize, space, mapQrys, topVer, extraSpaces, null), partsMap)) {
+                    new GridQueryRequest(qryReqId, r.pageSize, space, mapQrys, topVer, extraSpaces, null, timeoutMillis), partsMap)) {
                     awaitAllReplies(r, nodes);
+
+                    mapQrysCancel.set(F.noop()); // Remote queries are finished.
 
                     Object state = r.state.get();
 
@@ -646,8 +650,6 @@ public class GridReduceQueryExecutor {
                             res.add(resRow);
                         }
 
-                        mapQrysCancel.set(F.noop()); // Prevent leaks.
-
                         resIter = res.iterator();
                     }
                     else {
@@ -659,9 +661,8 @@ public class GridReduceQueryExecutor {
                             rdc.query(),
                             F.asList(rdc.parameters()),
                             false,
+                            timeoutMillis,
                             reduceQryCancel);
-
-                        mapQrysCancel.set(F.noop()); // Prevent leaks.
 
                         resIter = new Iter(res);
                     }
@@ -684,6 +685,9 @@ public class GridReduceQueryExecutor {
             }
             catch (IgniteCheckedException | RuntimeException e) {
                 U.closeQuiet(r.conn);
+
+                if (e instanceof QueryCancelledException) // Explicitly stop remote queries on reduce query cancellation.
+                    cancelRemoteQueries(nodes, r, qryReqId);
 
                 if (e instanceof CacheException)
                     throw (CacheException)e;
@@ -1030,7 +1034,7 @@ public class GridReduceQueryExecutor {
         List<List<?>> lists = new ArrayList<>();
 
         for (int i = 0, mapQrys = qry.mapQueries().size(); i < mapQrys; i++) {
-            ResultSet rs = h2.executeSqlQueryWithTimer(space, c, "SELECT PLAN FROM " + table(i), null, false, null);
+            ResultSet rs = h2.executeSqlQueryWithTimer(space, c, "SELECT PLAN FROM " + table(i), null, false, 0, null);
 
             lists.add(F.asList(getPlan(rs)));
         }
@@ -1050,6 +1054,7 @@ public class GridReduceQueryExecutor {
             "EXPLAIN " + rdc.query(),
             F.asList(rdc.parameters()),
             false,
+            0,
             null);
 
         lists.add(F.asList(getPlan(rs)));

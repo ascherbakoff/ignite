@@ -21,7 +21,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.cache.CacheException;
 import org.apache.ignite.Ignite;
@@ -36,12 +35,14 @@ import org.apache.ignite.internal.processors.query.h2.QueryCancelledException;
 import org.apache.ignite.internal.util.typedef.internal.U;
 
 import static org.apache.ignite.cache.CacheMode.PARTITIONED;
-import static org.apache.ignite.cache.CachePeekMode.ALL;
 
 /**
  * Tests distributed fields query resources cleanup on cancellation by various reasons.
  */
 public class IgniteCacheQueryStopSelfTest extends IgniteCacheAbstractQuerySelfTest {
+    /** Value size. */
+    public static final int VAL_SIZE = 16;
+
     /** */
     private static final String QUERY_1 = "select a._key, b._key from String a, String b";
 
@@ -49,14 +50,14 @@ public class IgniteCacheQueryStopSelfTest extends IgniteCacheAbstractQuerySelfTe
     private static final String QUERY_2 = "select a._key, count(*) from String a group by a._key";
 
     /** */
-    private static final String QUERY_3 = "select a._val, b._val from String a, String b";
+    private static final String QUERY_3 = "select a._val from String a";
 
     /** */
     private static final String QUERY_4 = "select a._key from String a";
 
     /** {@inheritDoc} */
     @Override protected int gridCount() {
-        return 1;
+        return 3;
     }
 
     /** {@inheritDoc} */
@@ -65,66 +66,68 @@ public class IgniteCacheQueryStopSelfTest extends IgniteCacheAbstractQuerySelfTe
     }
 
     /** */
-//    public void testRemoteQueryExecutionTimeout() throws Exception {
-//        testQueryTimeout(10_000, 4, QUERY_1, 3);
-//    }
+    public void testRemoteQueryExecutionTimeout() throws Exception {
+        testQueryCancel(10_000, VAL_SIZE, QUERY_1, 500, TimeUnit.MILLISECONDS, true);
+    }
 
-    /**
-     * Tests stopping two-step long query while result set is being generated on remote nodes.
-     */
+    /** */
+    public void testRemoteQueryWithMergeTableTimeout() throws Exception {
+        testQueryCancel(100_000, VAL_SIZE, QUERY_2, 500, TimeUnit.MILLISECONDS, true);
+    }
+
+    /** */
     public void testRemoteQueryExecutionCancel1() throws Exception {
-        testQueryCancel(10_000, 4, QUERY_1, 500);
+        testQueryCancel(10_000, VAL_SIZE, QUERY_1, 500, TimeUnit.MILLISECONDS, false);
     }
 
     /** */
     public void testRemoteQueryExecutionCancel2() throws Exception {
-        testQueryCancel(10_000, 4, QUERY_1, 1000);
+        testQueryCancel(10_000, VAL_SIZE, QUERY_1, 1_000, TimeUnit.MILLISECONDS, false);
     }
 
     /** */
     public void testRemoteQueryExecutionCancel3() throws Exception {
-        testQueryCancel(10_000, 4, QUERY_1, 3000);
+        testQueryCancel(10_000, VAL_SIZE, QUERY_1, 3_000, TimeUnit.MILLISECONDS, false);
     }
 
     /** */
     public void testRemoteQueryWithMergeTableCancel1() throws Exception {
-        testQueryCancel(100_000, 4, QUERY_2, 500);
+        testQueryCancel(100_000, VAL_SIZE, QUERY_2, 500, TimeUnit.MILLISECONDS, false);
     }
 
     /** */
     public void testRemoteQueryWithMergeTableCancel2() throws Exception {
-        testQueryCancel(100_000, 4, QUERY_2, 1_500);
+        testQueryCancel(100_000, VAL_SIZE, QUERY_2, 1_500, TimeUnit.MILLISECONDS, false);
     }
 
     /** */
     public void testRemoteQueryWithMergeTableCancel3() throws Exception {
-        testQueryCancel(100_000, 4, QUERY_2, 3_000);
+        testQueryCancel(100_000, VAL_SIZE, QUERY_2, 3_000, TimeUnit.MILLISECONDS, false);
     }
 
     /** */
     public void testRemoteQueryWithoutMergeTableCancel1() throws Exception {
-        testQueryCancel(100_000, 512, QUERY_3, 500);
+        testQueryCancel(100_000, VAL_SIZE, QUERY_3, 500, TimeUnit.MILLISECONDS, false);
     }
 
     /** */
     public void testRemoteQueryWithoutMergeTableCancel2() throws Exception {
-        testQueryCancel(100_000, 512, QUERY_3, 1_500);
+        testQueryCancel(100_000, VAL_SIZE, QUERY_3, 1_000, TimeUnit.MILLISECONDS, false);
     }
 
     /** */
     public void testRemoteQueryWithoutMergeTableCancel3() throws Exception {
-        testQueryCancel(100_000, 512, QUERY_3, 3000);
+        testQueryCancel(100_000, VAL_SIZE, QUERY_3, 3_000, TimeUnit.MILLISECONDS, false);
     }
 
     /** */
     public void testRemoteQueryAlreadyFinishedStop() throws Exception {
-        testQueryCancel(100, 4, QUERY_4, 3000);
+        testQueryCancel(100, VAL_SIZE, QUERY_4, 3000, TimeUnit.MILLISECONDS, false);
     }
 
-    /**
-     * Tests stopping two step query while fetching result set from remote nodes.
-     */
-    private void testQueryCancel(int keyCnt, int valSize, String sql, long cancelTimeout) throws Exception {
+    /** */
+    private void testQueryCancel(int keyCnt, int valSize, String sql, int timeoutMillis, TimeUnit timeUnit,
+        boolean timeout) throws Exception {
         try (Ignite client = startGrid("client")) {
 
             IgniteCache<Object, Object> cache = client.cache(null);
@@ -132,32 +135,36 @@ public class IgniteCacheQueryStopSelfTest extends IgniteCacheAbstractQuerySelfTe
             assertEquals(0, cache.localSize());
 
             int p = 1;
-            for (int i = 0; i < keyCnt; i++) {
+            for (int i = 1; i <= keyCnt; i++) {
                 char[] tmp = new char[valSize];
                 Arrays.fill(tmp, ' ');
                 cache.put(i, new String(tmp));
 
-                if ((i+1)/(float)keyCnt >= p/10f) {
-                    log().info("Loaded " + (i+1) + " of " + keyCnt);
+                if (i/(float)keyCnt >= p/10f) {
+                    log().info("Loaded " + i + " of " + keyCnt);
 
                     p++;
                 }
-
             }
 
             assertEquals(0, cache.localSize());
 
-            final QueryCursor<List<?>> cursor = cache.query(new SqlFieldsQuery(sql));
+            SqlFieldsQuery qry = new SqlFieldsQuery(sql);
 
-            final CountDownLatch l = new CountDownLatch(1);
+            final QueryCursor<List<?>> cursor;
+            if (timeout) {
+                qry.setTimeout(timeoutMillis, timeUnit);
 
-            ignite().scheduler().runLocal(new Runnable() {
-                @Override public void run() {
-                    cursor.close();
+                cursor = cache.query(qry);
+            } else {
+                cursor = cache.query(qry);
 
-                    l.countDown();
-                }
-            }, cancelTimeout, TimeUnit.MILLISECONDS);
+                ignite().scheduler().runLocal(new Runnable() {
+                    @Override public void run() {
+                        cursor.close();
+                    }
+                }, timeoutMillis, timeUnit);
+            }
 
             try {
                 cursor.iterator();
@@ -168,54 +175,14 @@ public class IgniteCacheQueryStopSelfTest extends IgniteCacheAbstractQuerySelfTe
                 assertTrue("Must throw correct exception", ex.getCause() instanceof QueryCancelledException);
             }
 
-            l.await();
+            Thread.sleep(TimeUnit.MILLISECONDS.convert(timeoutMillis, timeUnit) + 3_000);
 
-            // Give some time to clean up after query cancellation.
-            Thread.sleep(3000);
-
-            // Validate nodes query result buffer.
             checkCleanState();
         }
     }
 
     /**
-     * Tests stopping two step query on timeout.
-     */
-    private void testQueryTimeout(int keyCnt, int valSize, String sql, int qryTimeoutSecs) throws Exception {
-        try (Ignite client = startGrid("client")) {
-
-            IgniteCache<Object, Object> cache = client.cache(null);
-
-            assertEquals(0, cache.localSize());
-
-            for (int i = 0; i < keyCnt; i++) {
-                char[] tmp = new char[valSize];
-                Arrays.fill(tmp, ' ');
-                cache.put(i, new String(tmp));
-            }
-
-            assertEquals(0, cache.localSize(ALL));
-
-            SqlFieldsQuery sqlFldQry = new SqlFieldsQuery(sql);
-            //sqlFldQry.setTimeout(qryTimeoutSecs, TimeUnit.SECONDS);
-
-            final QueryCursor<?> cursor = cache.query(sqlFldQry);
-
-            try {
-                // Trigger distributed execution.
-                cursor.iterator();
-            }
-            catch (CacheException ex) {
-                log().error("Got expected exception", ex);
-            }
-
-            // Validate nodes query result buffer.
-            checkCleanState();
-        }
-    }
-
-    /**
-     * Validates clean state on all participating nodes after query execution stopping.
+     * Validates clean state on all participating nodes after query cancellation.
      */
     private void checkCleanState() {
         int total = gridCount();
