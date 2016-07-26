@@ -819,7 +819,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
      * @param sql Sql query.
      * @param params Parameters.
      * @param useStmtCache If {@code true} uses statement cache.
-     * @param cancel Reference to cancellation closure.
+     * @param cancel Reference to query cancellation closure.
      * @return Result.
      * @throws IgniteCheckedException If failed.
      */
@@ -1014,14 +1014,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
     }
 
     /** {@inheritDoc} */
-    @Override public Iterable<List<?>> queryTwoStep(final GridCacheContext<?,?> cctx, final GridCacheTwoStepQuery qry,
-        final boolean keepCacheObj) {
-        return queryTwoStep(cctx, qry, keepCacheObj, 0, new AtomicReference<GridAbsClosure>(),
-            new AtomicReference<GridAbsClosure>());
-    }
-
-    /** {@inheritDoc} */
-    @Override public Iterable<List<?>> queryTwoStep(final GridCacheContext<?, ?> cctx, final GridCacheTwoStepQuery qry,
+    private Iterable<List<?>> doQueryTwoStep(final GridCacheContext<?, ?> cctx, final GridCacheTwoStepQuery qry,
         final boolean keepCacheObj,
         final int timeoutMillis,
         final AtomicReference<GridAbsClosure> mapQrysCancel,
@@ -1057,7 +1050,8 @@ public class IgniteH2Indexing implements GridQueryIndexing {
 
         fqry.setArgs(qry.getArgs());
         fqry.setPageSize(qry.getPageSize());
-        fqry.setTimeout(qry.getTimeout(), TimeUnit.MILLISECONDS);
+        if(qry.getTimeout() > 0)
+            fqry.setTimeout(qry.getTimeout(), TimeUnit.MILLISECONDS);
 
         final QueryCursor<List<?>> res = queryTwoStep(cctx, fqry);
 
@@ -1169,7 +1163,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
         AtomicReference<GridAbsClosure> rdcQryCancel = new AtomicReference<>();
 
         QueryCursorImpl<List<?>> cursor = new QueryCursorImpl<>(
-            queryTwoStep(cctx, twoStepQry, cctx.keepBinary(), qry.getTimeout(), mapQrysCancel, rdcQryCancel),
+            doQueryTwoStep(cctx, twoStepQry, cctx.keepBinary(), qry.getTimeout(), mapQrysCancel, rdcQryCancel),
             mapQrysCancel,
             rdcQryCancel);
 

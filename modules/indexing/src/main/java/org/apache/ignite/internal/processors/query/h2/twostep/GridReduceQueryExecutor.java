@@ -452,9 +452,9 @@ public class GridReduceQueryExecutor {
      * @param qry Query.
      * @param keepBinary Keep binary.
      * @param timeoutMillis Timeout in milliseconds.
-     * @param mapQrysCancel Used to cancel map queries.
-     * @param reduceQryCancel Used to cancel reduce query.
-     * @return Cursor.
+     * @param mapQrysCancel Reference to remote queries cancellation closure.
+     * @param reduceQryCancel Reference to reduce query cancellation closure.
+     * @return Rows iterator.
      */
     public Iterator<List<?>> query(GridCacheContext<?,?> cctx, GridCacheTwoStepQuery qry, boolean keepBinary,
         int timeoutMillis, AtomicReference<GridAbsClosure> mapQrysCancel,

@@ -60,34 +60,6 @@ public interface GridQueryIndexing {
     public void stop() throws IgniteCheckedException;
 
     /**
-     * Runs two step query.
-     *
-     * @param cctx Cache context.
-     * @param qry Query.
-     * @param keepCacheObjects If {@code true}, cache objects representation will be preserved.
-     * @return Cursor.
-     */
-    public Iterable<List<?>> queryTwoStep(GridCacheContext<?,?> cctx, GridCacheTwoStepQuery qry,
-        boolean keepCacheObjects);
-
-    /**
-     * Runs two step query with cancellation support.
-     *
-     * @param cctx Cache context.
-     * @param qry Query.
-     * @param keepCacheObjects If {@code true}, cache objects representation will be preserved.
-     * @param timeoutMillis Query timeout in millis.
-     * @param mapQrysCancel Used for map queries cancellation.
-     * @param rdcQryCancel Used for reduce query cancellation.
-     * @return Cursor.
-     */
-    public Iterable<List<?>> queryTwoStep(GridCacheContext<?,?> cctx, GridCacheTwoStepQuery qry,
-        boolean keepCacheObjects,
-        int timeoutMillis,
-        final AtomicReference<GridAbsClosure> mapQrysCancel,
-        final AtomicReference<GridAbsClosure> rdcQryCancel);
-
-    /**
      * Parses SQL query into two step query and executes it.
      *
      * @param cctx Cache context.
