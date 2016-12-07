@@ -39,11 +39,11 @@ import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.cache.affinity.AffinityFunction;
 import org.apache.ignite.cache.affinity.AffinityFunctionContext;
 import org.apache.ignite.cache.affinity.AffinityNodeHashResolver;
+import org.apache.ignite.cache.affinity.AffinityPrimaryFilter;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.internal.processors.cache.GridCacheUtils;
-import org.apache.ignite.internal.util.lang.IgniteOutClosureX;
 import org.apache.ignite.internal.util.typedef.F;
 import org.apache.ignite.internal.util.typedef.internal.A;
 import org.apache.ignite.internal.util.typedef.internal.LT;
@@ -51,7 +51,6 @@ import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiClosure;
 import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgniteBiTuple;
-import org.apache.ignite.lang.IgniteClosure;
 import org.apache.ignite.resources.IgniteInstanceResource;
 import org.apache.ignite.resources.LoggerResource;
 import org.jetbrains.annotations.Nullable;
@@ -114,7 +113,8 @@ public class RendezvousAffinityFunction implements AffinityFunction, Externaliza
     /** Optional backup filter. First node is primary, second node is a node being tested. */
     private IgniteBiPredicate<ClusterNode, ClusterNode> backupFilter;
 
-    private IgniteBiClosure<Integer, List<ClusterNode>, List<ClusterNode>> primaryNodeFilter;
+    /** Optional filter for allowed primary nodes for partition hosting. */
+    private AffinityPrimaryFilter affinityPrimaryFilter;
 
     /** Optional affinity backups filter. The first node is a node being tested,
      *  the second is a list of nodes that are already assigned for a given partition (the first node in the list
@@ -309,13 +309,20 @@ public class RendezvousAffinityFunction implements AffinityFunction, Externaliza
         return affinityBackupFilter;
     }
 
-    @Nullable public IgniteBiClosure<Integer, List<ClusterNode>, List<ClusterNode>> getPrimaryNodeFilter() {
-        return primaryNodeFilter;
+    /**
+     * Sets affinity primary filter.
+     * @return filter.
+     */
+    @Nullable public AffinityPrimaryFilter getAffinityPrimaryFilter() {
+        return affinityPrimaryFilter;
     }
 
-    public void setPrimaryNodeFilter(@Nullable IgniteBiClosure<
-        Integer, List<ClusterNode>, List<ClusterNode>> primaryNodeFilter) {
-        this.primaryNodeFilter = primaryNodeFilter;
+    /**
+     * Gets affinity primary filter.
+     * @param affinityPrimaryFilter filter.
+     */
+    public void setAffinityPrimaryFilter(@Nullable AffinityPrimaryFilter affinityPrimaryFilter) {
+        this.affinityPrimaryFilter = affinityPrimaryFilter;
     }
 
     /**
@@ -378,8 +385,8 @@ public class RendezvousAffinityFunction implements AffinityFunction, Externaliza
 
         MessageDigest d = digest.get();
 
-        if (primaryNodeFilter != null)
-            nodes = primaryNodeFilter.apply(part, nodes);
+        if (affinityPrimaryFilter != null)
+            nodes = affinityPrimaryFilter.apply(part, nodes);
 
         for (ClusterNode node : nodes) {
             Object nodeHash = resolveNodeHash(node);
@@ -516,7 +523,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Externaliza
         out.writeBoolean(exclNeighbors);
         out.writeObject(hashIdRslvr);
         out.writeObject(backupFilter);
-        out.writeObject(primaryNodeFilter);
+        out.writeObject(affinityPrimaryFilter);
     }
 
     /** {@inheritDoc} */
@@ -526,7 +533,7 @@ public class RendezvousAffinityFunction implements AffinityFunction, Externaliza
         exclNeighbors = in.readBoolean();
         hashIdRslvr = (AffinityNodeHashResolver)in.readObject();
         backupFilter = (IgniteBiPredicate<ClusterNode, ClusterNode>)in.readObject();
-        primaryNodeFilter = (IgniteBiClosure<Integer, List<ClusterNode>, List<ClusterNode>>)in.readObject();
+        affinityPrimaryFilter = (AffinityPrimaryFilter)in.readObject();
     }
 
     /**
