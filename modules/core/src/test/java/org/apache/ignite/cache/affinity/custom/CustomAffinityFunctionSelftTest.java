@@ -244,16 +244,18 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
             new NodeAttributeFilter(ZONE_ATTR, zone),
             new NodeAttributeFilter(CELL_ATTR, "cell0"));
 
-        validateCellDistribution(zone, cellNodes0, assignment);
+        validateCellDistribution(zone, cells, cellNodes0, assignment);
 
         assertEquals("Cell size", CELL_SIZE, cellNodes0.size());
+
+        System.out.println("------------");
 
         List<ClusterNode> cellNodes1 = IgniteUtils.arrayList(
             assignment.topology,
             new NodeAttributeFilter(ZONE_ATTR, zone),
             new NodeAttributeFilter(CELL_ATTR, "cell1"));
 
-        validateCellDistribution(zone, cellNodes1, assignment);
+        validateCellDistribution(zone, cells, cellNodes1, assignment);
 
         assertEquals("Cell size", CELL_SIZE, cellNodes1.size());
 
@@ -265,7 +267,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         // Partitions must be deployed on equal number of nodes in both DCs.
     }
 
-    private void validateCellDistribution(Object zone, List<ClusterNode> cellNodes, Assignment assignment) {
+    private  Map<UUID, Collection<Integer>> validateCellDistribution(Object zone, int cellsCnt, List<ClusterNode> cellNodes, Assignment assignment) {
         List<Integer> range = ZONE_TO_PART_MAP.get(zone);
 
         int partsCnt = range.get(1);
@@ -274,7 +276,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
 
         Map<UUID, Collection<Integer>> mapping = new HashMap<>();
 
-        int ideal = Math.round((float)partsCnt / topSize * Math.min(BACKUPS + 1, topSize));
+        // Ideal count of partition on cell node.
+        int ideal = Math.round((float)partsCnt / cellsCnt / topSize * Math.min(BACKUPS + 1, topSize));
 
         int start = range.get(0);
         int stop = start + range.get(1);
@@ -282,6 +285,9 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         for (int part = start; part < stop; part++) {
             for (ClusterNode node : assignment.assignment.get(part)) {
                 assert node != null;
+
+                if (cellNodes.contains(node))
+                    continue;
 
                 Collection<Integer> parts = mapping.get(node.id());
 
@@ -304,6 +310,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
 
         log().warning("max=" + max + ", min=" + min + ", ideal=" + ideal + ", minDev=" + deviation(min, ideal) + "%, " +
             "maxDev=" + deviation(max, ideal) + "%");
+
+        return mapping;
     }
 
     private static class NodeAttributeFilter implements IgnitePredicate<ClusterNode> {
@@ -412,10 +420,13 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
                 Object cell = null;
 
                 for (Object testCell : cells) {
-                    long cellHash = ((long)part << 32) | testCell.hashCode();
+                    long cellHash = hash(part, testCell);
 
-                    if (cellHash > hash)
+                    if (cellHash > hash) {
                         cell = testCell;
+
+                        hash = cellHash;
+                    }
                 }
 
                 List<ClusterNode> cellNodes = new ArrayList<>();
@@ -474,6 +485,38 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         GridTestUtils.setFieldValue(function, RendezvousAffinityFunction.class, "ignite", ignite);
 
         return function;
+    }
+
+    public void testHash() {
+        int r1 = 0;
+        int r2 = 0;
+        for (int i = 400; i < 1000; i++) {
+            long h1 = hash(i, "cell0");
+
+            long h2 = hash(i, "cell1");
+
+            if (h1 > h2)
+                r1++;
+            else
+                r2++;
+        }
+
+        System.out.println("r1=" + r1 + ", r2=" + r2);
+    }
+
+    /**
+     * @param part Partition.
+     * @param obj Object.
+     */
+    private long hash(Integer part, Object obj) {
+        return xorshift64star(((long)part << 32) | obj.hashCode());
+    }
+
+    public static long xorshift64star(long x) {
+        x ^= x >>> 12; // a
+        x ^= x << 25; // b
+        x ^= x >>> 27; // c
+        return x * 2685821657736338717L;
     }
 
     /**
