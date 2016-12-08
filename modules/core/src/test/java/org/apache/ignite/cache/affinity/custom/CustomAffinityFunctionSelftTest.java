@@ -49,10 +49,8 @@ import org.apache.ignite.testframework.junits.common.GridCommonAbstractTest;
 
 /**
  * The implementation splits partitions to zones, each zone is split to cells which contain equal fixed number of
- * cluster nodes.
- * Zone may grow or shrink only by cell.
- * Partition data is lost then cell is gone.
- * Partitions must be distributed equally between cells.
+ * cluster nodes. Zone may grow or shrink only by cell. Partition data is lost then cell is gone. Partitions must be
+ * distributed equally between cells.
  */
 public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     /** Parts count. */
@@ -117,8 +115,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     }
 
     /**
-     * @param part Partition.
-     * TODO use indexed search.
+     * @param part Partition. TODO use indexed search.
      */
     private Object partToZone(int part) {
         for (Map.Entry<Object, List<Integer>> entry : ZONE_TO_PART_MAP.entrySet()) {
@@ -233,25 +230,39 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
      * Tests partition distribution in zone with several cells.
      */
     public void testDistribution() {
-        int cells = 1;
+        int cells = 2;
 
         Assignment assignment = createAssignment(ZONES.length, cells, CELL_SIZE);
 
         assertEquals("Topology size", ZONES.length * cells * CELL_SIZE, assignment.topology.size());
 
         //for (Object zone : ZONES) {
-            Object zone = ZONES[3];
+        Object zone = ZONES[3];
 
-            String cell0 = "cell0";
-            List<ClusterNode> cellNodes = IgniteUtils.arrayList(
-                assignment.topology,
-                new NodeAttributeFilter(ZONE_ATTR, zone),
-                new NodeAttributeFilter(CELL_ATTR, cell0));
+        List<ClusterNode> cellNodes0 = IgniteUtils.arrayList(
+            assignment.topology,
+            new NodeAttributeFilter(ZONE_ATTR, zone),
+            new NodeAttributeFilter(CELL_ATTR, "cell0"));
 
-            validateCellDistribution(zone, cellNodes, assignment);
+        validateCellDistribution(zone, cellNodes0, assignment);
 
-            assertEquals("Cell size", CELL_SIZE, cellNodes.size());
-        //}
+        assertEquals("Cell size", CELL_SIZE, cellNodes0.size());
+
+        List<ClusterNode> cellNodes1 = IgniteUtils.arrayList(
+            assignment.topology,
+            new NodeAttributeFilter(ZONE_ATTR, zone),
+            new NodeAttributeFilter(CELL_ATTR, "cell1"));
+
+        validateCellDistribution(zone, cellNodes1, assignment);
+
+        assertEquals("Cell size", CELL_SIZE, cellNodes1.size());
+
+        // Cells should have no intersection
+        assertTrue("Cells are different", Collections.disjoint(cellNodes0, cellNodes1));
+
+        // Cells should not have common partitions
+
+        // Partitions must be deployed on equal number of nodes in both DCs.
     }
 
     private void validateCellDistribution(Object zone, List<ClusterNode> cellNodes, Assignment assignment) {
@@ -441,7 +452,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
                 // Enforce rule: equal number of nodes hosting partition in each DC
                 int dcCnt = primDc.equals(dcAttr) ? 1 : 0;
 
-                int maxAllowed = (BACKUPS + 1)/2;
+                int maxAllowed = (BACKUPS + 1) / 2;
 
                 for (ClusterNode clusterNode : primaryAndBackupNodes) {
                     Object nodeDcAttr = clusterNode.attribute(DC_ATTR);
@@ -505,8 +516,6 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
             return result;
         }
     }
-
-
 
     /**
      * @param val Value.
