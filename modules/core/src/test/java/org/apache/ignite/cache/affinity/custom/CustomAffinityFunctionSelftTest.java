@@ -451,7 +451,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
                     if (nodeDcAttr.equals(dcAttr)) {
                         dcCnt++;
 
-                        if (dcCnt >= maxAllowed)
+                        if (dcCnt > maxAllowed)
                             return false;
                     }
                 }
