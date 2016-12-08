@@ -19,7 +19,10 @@ package org.apache.ignite.cache.affinity.custom;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -35,9 +38,11 @@ import org.apache.ignite.events.DiscoveryEvent;
 import org.apache.ignite.events.EventType;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.affinity.GridAffinityFunctionContextImpl;
+import org.apache.ignite.internal.util.IgniteUtils;
 import org.apache.ignite.internal.util.typedef.internal.A;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiPredicate;
+import org.apache.ignite.lang.IgnitePredicate;
 import org.apache.ignite.testframework.GridTestNode;
 import org.apache.ignite.testframework.GridTestUtils;
 import org.apache.ignite.testframework.junits.common.GridCommonAbstractTest;
@@ -73,6 +78,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         "Zone1", "Zone2", "Zone3", "Zone4", "Zone5"
     };
 
+    public static final String ATTR_REQ_MSG = "%s attribute is missing for node %s";
+
     /** Map partitions to zones */
     public static final NavigableMap<Object, List<Integer>> ZONE_TO_PART_MAP = new TreeMap<Object, List<Integer>>() {{
         put(ZONES[0], Arrays.asList(0, 10)); // [0,10) in Zone1
@@ -91,6 +98,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     /** Ignite. */
     private static Ignite ignite;
 
+    private AffinityFunction aff;
+
     /** {@inheritDoc} */
     @Override protected void beforeTestsStarted() throws Exception {
         ignite = startGrid();
@@ -99,6 +108,12 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     /** {@inheritDoc} */
     @Override protected void afterTestsStopped() throws Exception {
         stopAllGrids();
+    }
+
+    @Override protected void beforeTest() throws Exception {
+        super.beforeTest();
+
+        aff = affinityFunction();
     }
 
     /**
@@ -120,8 +135,6 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
      * Tests key split between zones.
      */
     public void testKeySplitBetweenZones() {
-        AffinityFunction aff = affinityFunction();
-
         for (Map.Entry<Object, List<Integer>> entry : ZONE_TO_PART_MAP.entrySet()) {
             for (int i = 0; i < 10_000; i++) {
                 int part = aff.partition(new TestKey(i, entry.getKey()));
@@ -140,67 +153,196 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
      * Tests assignment in zone.
      */
     public void testZoneAssignemnt() {
-        AffinityFunction aff = affinityFunction();
+        Assignment assignment = createAssignment(ZONES.length, 1, 1);
 
-        List<ClusterNode> nodes = createTopology(ZONES.length, 1, 1, 1);
-
-        ClusterNode last = nodes.get(nodes.size() - 1);
-
-        DiscoveryEvent discoEvt = new DiscoveryEvent(last, "", EventType.EVT_NODE_JOINED, last);
-
-        GridAffinityFunctionContextImpl ctx =
-            new GridAffinityFunctionContextImpl(nodes, null, discoEvt, new AffinityTopologyVersion(0), BACKUPS);
-
-        List<List<ClusterNode>> assignment = aff.assignPartitions(ctx);
-
-        printAssignment(assignment, BACKUPS, PARTS_COUNT, nodes.size());
+        printAssignment(assignment.assignment, BACKUPS, PARTS_COUNT);
     }
 
     /**
      * @param zones Zones.
-     * @param dataCenters Data centers.
      * @param cells Cells per DC.
      * @param nodesPerCell Nodes per cell.
      */
-    public List<ClusterNode> createTopology(int zones, int dataCenters, int cells, int nodesPerCell) {
-        List<ClusterNode> nodes = new ArrayList<>(zones * cells * nodesPerCell);
+    public Assignment createAssignment(int zones, int cells, int nodesPerCell) {
+        int top = 0;
+
+        Assignment a = new Assignment();
+
+        a.topology = new ArrayList<>(zones * cells * nodesPerCell);
 
         for (int z = 0; z < zones; z++) {
-            for (int d = 0; d < dataCenters; d++) {
-                for (int c = 0; c < cells; c++) {
-                    for (int n = 0; n < nodesPerCell; n++)
-                        nodes.add(createNode(ZONES[z], "dc" + d, "cell" + c));
+            int dc = 0;
+
+            for (int c = 0; c < cells; c++) {
+                for (int n = 0; n < nodesPerCell; n++) {
+                    ClusterNode node = createNode(ZONES[z], "dc" + (dc++ % 2), "cell" + c);
+
+                    a.topology.add(node);
+
+                    DiscoveryEvent discoEvt = new DiscoveryEvent(node, "", EventType.EVT_NODE_JOINED, node);
+
+                    GridAffinityFunctionContextImpl ctx =
+                        new GridAffinityFunctionContextImpl(a.topology, null, discoEvt, new AffinityTopologyVersion(top++), BACKUPS);
+
+                    a.assignment = aff.assignPartitions(ctx);
                 }
             }
         }
 
-        return nodes;
+        return a;
+    }
+
+    /**
+     * Assignment info.
+     */
+    private static class Assignment {
+        public List<List<ClusterNode>> assignment;
+
+        public List<ClusterNode> topology;
     }
 
     /**
      * @param zone Zone.
-     * @param dcId Data center id.
+     * @param dataCenterId Data center id.
      * @param cellId Cell id.
      */
-    private ClusterNode createNode(Object zone, Object dcId, Object cellId) {
+    private ClusterNode createNode(Object zone, Object dataCenterId, Object cellId) {
         GridTestNode node = new GridTestNode(UUID.randomUUID());
 
         node.setAttribute(ZONE_ATTR, zone);
-        node.setAttribute(DC_ATTR, dcId);
+        node.setAttribute(DC_ATTR, dataCenterId);
         node.setAttribute(CELL_ATTR, cellId);
 
         return node;
     }
 
-    private void printAssignment(List<List<ClusterNode>> assignment, int backups, int partitions, int topSize) {
+    private void printAssignment(List<List<ClusterNode>> assignment, int backups, int partitions) {
         for (int part = 0; part < assignment.size(); part++) {
             for (ClusterNode node : assignment.get(part))
                 System.out.println("[Part=" + part + ", Zone=" + node.attribute(ZONE_ATTR) + ", Cell=" + node.attribute(CELL_ATTR));
         }
     }
 
-    public void testZoneResize() {
+    /**
+     * TODO
+     */
+    public void testEmptyZones() {
+    }
 
+    /**
+     * Tests partition distribution in zone with several cells.
+     */
+    public void testDistribution() {
+        int cells = 1;
+
+        Assignment assignment = createAssignment(ZONES.length, cells, CELL_SIZE);
+
+        assertEquals("Topology size", ZONES.length * cells * CELL_SIZE, assignment.topology.size());
+
+        //for (Object zone : ZONES) {
+            Object zone = ZONES[3];
+
+            String cell0 = "cell0";
+            List<ClusterNode> cellNodes = IgniteUtils.arrayList(
+                assignment.topology,
+                new NodeAttributeFilter(ZONE_ATTR, zone),
+                new NodeAttributeFilter(CELL_ATTR, cell0));
+
+            validateCellDistribution(zone, cellNodes, assignment);
+
+            assertEquals("Cell size", CELL_SIZE, cellNodes.size());
+        //}
+    }
+
+    private void validateCellDistribution(Object zone, List<ClusterNode> cellNodes, Assignment assignment) {
+        List<Integer> range = ZONE_TO_PART_MAP.get(zone);
+
+        int partsCnt = range.get(1);
+
+        int topSize = cellNodes.size();
+
+        Map<UUID, Collection<Integer>> mapping = new HashMap<>();
+
+        int ideal = Math.round((float)partsCnt / topSize * Math.min(BACKUPS + 1, topSize));
+
+        int start = range.get(0);
+        int stop = start + range.get(1);
+
+        for (int part = start; part < stop; part++) {
+            for (ClusterNode node : assignment.assignment.get(part)) {
+                assert node != null;
+
+                Collection<Integer> parts = mapping.get(node.id());
+
+                if (parts == null) {
+                    parts = new HashSet<>();
+
+                    mapping.put(node.id(), parts);
+                }
+
+                assertTrue(parts.add(part));
+            }
+        }
+
+        int max = -1, min = Integer.MAX_VALUE;
+
+        for (Collection<Integer> parts : mapping.values()) {
+            max = Math.max(max, parts.size());
+            min = Math.min(min, parts.size());
+        }
+
+        log().warning("max=" + max + ", min=" + min + ", ideal=" + ideal + ", minDev=" + deviation(min, ideal) + "%, " +
+            "maxDev=" + deviation(max, ideal) + "%");
+    }
+
+    private static class NodeAttributeFilter implements IgnitePredicate<ClusterNode> {
+        private final String attrName;
+        private final Object attrVal;
+
+        public NodeAttributeFilter(String attrName, Object attrVal) {
+            this.attrName = attrName;
+            this.attrVal = attrVal;
+        }
+
+        /** {@inheritDoc} */
+        @Override public boolean apply(ClusterNode node) {
+            return node.attribute(attrName).equals(attrVal);
+        }
+    }
+
+    /**
+     * @param assignment Assignment to verify.
+     */
+    private void verifyAssignment(List<List<ClusterNode>> assignment, int keyBackups, int partsCnt, int topSize) {
+        Map<UUID, Collection<Integer>> mapping = new HashMap<>();
+
+        int ideal = Math.round((float)partsCnt / topSize * Math.min(keyBackups + 1, topSize));
+
+        for (int part = 0; part < assignment.size(); part++) {
+            for (ClusterNode node : assignment.get(part)) {
+                assert node != null;
+
+                Collection<Integer> parts = mapping.get(node.id());
+
+                if (parts == null) {
+                    parts = new HashSet<>();
+
+                    mapping.put(node.id(), parts);
+                }
+
+                assertTrue(parts.add(part));
+            }
+        }
+
+        int max = -1, min = Integer.MAX_VALUE;
+
+        for (Collection<Integer> parts : mapping.values()) {
+            max = Math.max(max, parts.size());
+            min = Math.min(min, parts.size());
+        }
+
+        log().warning("max=" + max + ", min=" + min + ", ideal=" + ideal + ", minDev=" + deviation(min, ideal) + "%, " +
+            "maxDev=" + deviation(max, ideal) + "%");
     }
 
     /**
@@ -236,9 +378,9 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
                 for (ClusterNode node : currTopNodes) {
                     Object nodeZone = node.attribute(ZONE_ATTR);
 
-                    A.notNull(zone, "Zone attribute is missing for node " + node);
+                    A.notNull(zone, String.format(ATTR_REQ_MSG, "Zone", node));
 
-                    if ( zone.equals(nodeZone)) {
+                    if (zone.equals(nodeZone)) {
                         zoneNodes.add(node);
 
                         Object nodeCell = node.attribute(CELL_ATTR);
@@ -271,7 +413,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
                 for (ClusterNode node : zoneNodes) {
                     Object nodeCell = node.attribute(CELL_ATTR);
 
-                    A.notNull(nodeCell, "Cell attribute is missing for node " + node);
+                    A.notNull(nodeCell, String.format(ATTR_REQ_MSG, "Cell", node));
 
                     if (nodeCell.equals(cell))
                         cellNodes.add(node);
@@ -283,19 +425,28 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
 
         function.setAffinityBackupFilter(new IgniteBiPredicate<ClusterNode, List<ClusterNode>>() {
             @Override public boolean apply(ClusterNode testNode, List<ClusterNode> primaryAndBackupNodes) {
-                if (BACKUPS + 1 >= primaryAndBackupNodes.size())
+                if (primaryAndBackupNodes.size() >= BACKUPS + 1)
                     return false;
+
+                ClusterNode prim = primaryAndBackupNodes.get(0);
+
+                Object primDc = prim.attribute(DC_ATTR);
+
+                A.notNull(primDc, "Data center attribute is missing for node " + prim);
 
                 Object dcAttr = testNode.attribute(DC_ATTR);
 
-                int dcCnt = 0;
+                A.notNull(dcAttr, "Data center attribute is missing for node " + prim);
 
-                int maxAllowed = CELL_SIZE/2;
+                // Enforce rule: equal number of nodes hosting partition in each DC
+                int dcCnt = primDc.equals(dcAttr) ? 1 : 0;
+
+                int maxAllowed = (BACKUPS + 1)/2;
 
                 for (ClusterNode clusterNode : primaryAndBackupNodes) {
                     Object nodeDcAttr = clusterNode.attribute(DC_ATTR);
 
-                    A.notNull(nodeDcAttr, "Data center attribute is missing for testNode " + testNode);
+                    A.notNull(nodeDcAttr, "Data center attribute is missing for node " + testNode);
 
                     if (nodeDcAttr.equals(dcAttr)) {
                         dcCnt++;
@@ -353,5 +504,15 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
             result = 31 * result + zone.hashCode();
             return result;
         }
+    }
+
+
+
+    /**
+     * @param val Value.
+     * @param ideal Ideal.
+     */
+    private static int deviation(int val, int ideal) {
+        return Math.round(Math.abs(((float)val - ideal) / ideal * 100));
     }
 }

@@ -388,6 +388,9 @@ public class RendezvousAffinityFunction implements AffinityFunction, Externaliza
         if (affinityPrimaryFilter != null)
             nodes = affinityPrimaryFilter.apply(part, nodes);
 
+        if (nodes == null || nodes.size() == 0)
+            return Collections.emptyList();
+
         for (ClusterNode node : nodes) {
             Object nodeHash = resolveNodeHash(node);
 
