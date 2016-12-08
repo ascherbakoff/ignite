@@ -22,14 +22,16 @@ import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.lang.IgniteBiClosure;
 
 /**
- * Allows custom primary partitions assignment from subset of nodes.
+ * Allows partition placement to subset of cluster node.
+ *
+ * Backup nodes also will be assigned from the subset.
  */
 public interface AffinityPrimaryFilter extends IgniteBiClosure<Integer, List<ClusterNode>, List<ClusterNode>> {
     /**
-     * Returns nodes allowed to contain
+     * Return nodes allowed to contain given partition.
      * @param partition Partition.
      * @param currentTopologyNodes All nodes from current topology.
-     * @return subset of nodes allowed to contain given partition.
+     * @return Subset of nodes.
      */
     @Override public List<ClusterNode> apply(Integer partition, List<ClusterNode> currentTopologyNodes);
 }
