@@ -17,12 +17,16 @@
 
 package org.apache.ignite.cache.affinity.custom;
 
+import java.io.ByteArrayOutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -230,44 +234,148 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
      * Tests partition distribution in zone with several cells.
      */
     public void testDistribution() {
-        int cells = 2;
+        int cells = 1;
+
+        long t1 = System.nanoTime();
 
         Assignment assignment = createAssignment(ZONES.length, cells, CELL_SIZE);
+
+        long t2 = System.nanoTime();
+
+        System.out.println("Topology created for " + (t2 - t1) / 1000 / 1000. + " ms");
 
         assertEquals("Topology size", ZONES.length * cells * CELL_SIZE, assignment.topology.size());
 
         //for (Object zone : ZONES) {
         Object zone = ZONES[3];
 
-        List<ClusterNode> cellNodes0 = IgniteUtils.arrayList(
-            assignment.topology,
-            new NodeAttributeFilter(ZONE_ATTR, zone),
-            new NodeAttributeFilter(CELL_ATTR, "cell0"));
+        List<Map<UUID, Collection<Integer>>> mappings = new ArrayList<>();
 
-        validateCellDistribution(zone, cells, cellNodes0, assignment);
+        for (int c = 0; c < cells; c++) {
+            String cell = "cell" + c;
 
-        assertEquals("Cell size", CELL_SIZE, cellNodes0.size());
+            List<ClusterNode> nodes = IgniteUtils.arrayList(
+                assignment.topology,
+                new NodeAttributeFilter(ZONE_ATTR, zone),
+                new NodeAttributeFilter(CELL_ATTR, cell));
 
-        System.out.println("------------");
+            validateCell(cell, nodes);
 
-        List<ClusterNode> cellNodes1 = IgniteUtils.arrayList(
-            assignment.topology,
-            new NodeAttributeFilter(ZONE_ATTR, zone),
-            new NodeAttributeFilter(CELL_ATTR, "cell1"));
+            Map<UUID, Collection<Integer>> mapping = validateCellDistribution(zone, cells, nodes, assignment);
 
-        validateCellDistribution(zone, cells, cellNodes1, assignment);
+            mappings.add(mapping);
 
-        assertEquals("Cell size", CELL_SIZE, cellNodes1.size());
+            assertEquals("Cell size", CELL_SIZE, nodes.size());
+        }
 
-        // Cells should have no intersection
-        assertTrue("Cells are different", Collections.disjoint(cellNodes0, cellNodes1));
+        validatePartitions(mappings);
 
-        // Cells should not have common partitions
+        List<Integer> range = ZONE_TO_PART_MAP.get(zone);
 
-        // Partitions must be deployed on equal number of nodes in both DCs.
+        int start = range.get(0);
+        int end = start + range.get(1);
+
+        for (int part = start; part < end; part++)
+            validatePartition(part, assignment);
     }
 
-    private  Map<UUID, Collection<Integer>> validateCellDistribution(Object zone, int cellsCnt, List<ClusterNode> cellNodes, Assignment assignment) {
+    /**
+     * @param cell Cell.
+     * @param nodes Nodes.
+     */
+    private void validateCell(String cell, List<ClusterNode> nodes) {
+        assertEquals("Cell size", CELL_SIZE, nodes.size());
+
+        Map<Object, Integer> cnt = new HashMap<>();
+
+        for (ClusterNode node : nodes) {
+            Object cellId = node.attribute(CELL_ATTR);
+
+            assertEquals("Valid cell", cell, cellId);
+
+            Object dcId = node.attribute(DC_ATTR);
+
+            updateCounter(cnt, dcId, 1);
+        }
+
+        Iterator<Object> it = cnt.keySet().iterator();
+        Object k1 = it.next();
+        Object k2 = it.next();
+
+        boolean equals = cnt.get(k1).equals(cnt.get(k2));
+        assertTrue("Nodes distribution", equals);
+    }
+
+    /**
+     * Validates what mappings have no common partitions
+     *
+     * @param mappings Mappings.
+     */
+    private void validatePartitions(List<Map<UUID, Collection<Integer>>> mappings) {
+        if (mappings.size() == 1)
+            return;
+
+        for (int i = 0; i < mappings.size() - 1; i++) {
+            Map<UUID, Collection<Integer>> m1 = mappings.get(i);
+
+            Map<UUID, Collection<Integer>> m2 = mappings.get(i + 1);
+
+            assertTrue("Partitions not intersect", Collections.disjoint(m1.values(), m2.values()));
+        }
+    }
+
+    /**
+     * Validate rule for partitions placement: partition is evenly split between data centers on full topology(every
+     * cell contains CELL_SIZE elements)
+     *
+     * @param part Partition.
+     * @param assignment Assignment.
+     */
+    private void validatePartition(int part, Assignment assignment) {
+        List<ClusterNode> nodes = assignment.assignment.get(part);
+
+        assertEquals("Nodes count", BACKUPS + 1, nodes.size());
+
+        Map<Object, Integer> cnt = new HashMap<>();
+
+        for (ClusterNode node : nodes) {
+            Object dcId = node.attribute(DC_ATTR);
+
+            updateCounter(cnt, dcId, 1);
+        }
+
+        assertEquals("Data centers count", 2, cnt.size());
+
+        Iterator<Object> it = cnt.keySet().iterator();
+        Object k1 = it.next();
+        Object k2 = it.next();
+
+        boolean equals = cnt.get(k1).equals(cnt.get(k2));
+        assertTrue("Nodes distribution", equals);
+    }
+
+    /**
+     * @param map Map.
+     * @param key Key.
+     * @param delta Delta.
+     */
+    private void updateCounter(Map<Object, Integer> map, Object key, int delta) {
+        Integer cnt = map.get(key);
+
+        if (cnt == null)
+            cnt = 0;
+
+        map.put(key, cnt + delta);
+    }
+
+    /**
+     * @param zone Zone.
+     * @param cellsCnt Cells count.
+     * @param cellNodes Cell nodes.
+     * @param assignment Assignment.
+     */
+    private Map<UUID, Collection<Integer>> validateCellDistribution(Object zone, int cellsCnt,
+        List<ClusterNode> cellNodes, Assignment assignment) {
         List<Integer> range = ZONE_TO_PART_MAP.get(zone);
 
         int partsCnt = range.get(1);
@@ -286,7 +394,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
             for (ClusterNode node : assignment.assignment.get(part)) {
                 assert node != null;
 
-                if (cellNodes.contains(node))
+                // Skip node from other cell.
+                if (!cellNodes.contains(node))
                     continue;
 
                 Collection<Integer> parts = mapping.get(node.id());
@@ -329,40 +438,19 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         }
     }
 
-    /**
-     * @param assignment Assignment to verify.
-     */
-    private void verifyAssignment(List<List<ClusterNode>> assignment, int keyBackups, int partsCnt, int topSize) {
-        Map<UUID, Collection<Integer>> mapping = new HashMap<>();
+    /** Thread local message digest. */
+    private ThreadLocal<MessageDigest> digest = new ThreadLocal<MessageDigest>() {
+        @Override protected MessageDigest initialValue() {
+            try {
+                return MessageDigest.getInstance("MD5");
+            }
+            catch (NoSuchAlgorithmException e) {
+                assert false : "Should have failed in constructor";
 
-        int ideal = Math.round((float)partsCnt / topSize * Math.min(keyBackups + 1, topSize));
-
-        for (int part = 0; part < assignment.size(); part++) {
-            for (ClusterNode node : assignment.get(part)) {
-                assert node != null;
-
-                Collection<Integer> parts = mapping.get(node.id());
-
-                if (parts == null) {
-                    parts = new HashSet<>();
-
-                    mapping.put(node.id(), parts);
-                }
-
-                assertTrue(parts.add(part));
+                throw new IgniteException("Failed to obtain message digest (digest was available in constructor)", e);
             }
         }
-
-        int max = -1, min = Integer.MAX_VALUE;
-
-        for (Collection<Integer> parts : mapping.values()) {
-            max = Math.max(max, parts.size());
-            min = Math.min(min, parts.size());
-        }
-
-        log().warning("max=" + max + ", min=" + min + ", ideal=" + ideal + ", minDev=" + deviation(min, ideal) + "%, " +
-            "maxDev=" + deviation(max, ideal) + "%");
-    }
+    };
 
     /**
      * Affinity function to test.
@@ -397,7 +485,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
                 for (ClusterNode node : currTopNodes) {
                     Object nodeZone = node.attribute(ZONE_ATTR);
 
-                    A.notNull(zone, String.format(ATTR_REQ_MSG, "Zone", node));
+                    //A.notNull(zone, String.format(ATTR_REQ_MSG, "Zone", node));
 
                     if (zone.equals(nodeZone)) {
                         zoneNodes.add(node);
@@ -435,7 +523,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
                 for (ClusterNode node : zoneNodes) {
                     Object nodeCell = node.attribute(CELL_ATTR);
 
-                    A.notNull(nodeCell, String.format(ATTR_REQ_MSG, "Cell", node));
+                    //A.notNull(nodeCell, String.format(ATTR_REQ_MSG, "Cell", node));
 
                     if (nodeCell.equals(cell))
                         cellNodes.add(node);
@@ -450,35 +538,31 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
                 if (primaryAndBackupNodes.size() >= BACKUPS + 1)
                     return false;
 
-                ClusterNode prim = primaryAndBackupNodes.get(0);
-
-                Object primDc = prim.attribute(DC_ATTR);
-
-                A.notNull(primDc, "Data center attribute is missing for node " + prim);
+                //A.notNull(primDc, "Data center attribute is missing for node " + prim);
 
                 Object dcAttr = testNode.attribute(DC_ATTR);
 
-                A.notNull(dcAttr, "Data center attribute is missing for node " + prim);
+                //A.notNull(dcAttr, "Data center attribute is missing for node " + prim);
 
                 // Enforce rule: equal number of nodes hosting partition in each DC
-                int dcCnt = primDc.equals(dcAttr) ? 1 : 0;
+                int dcCnt = 0;
 
                 int maxAllowed = (BACKUPS + 1) / 2;
 
                 for (ClusterNode clusterNode : primaryAndBackupNodes) {
                     Object nodeDcAttr = clusterNode.attribute(DC_ATTR);
 
-                    A.notNull(nodeDcAttr, "Data center attribute is missing for node " + testNode);
+                    //A.notNull(nodeDcAttr, "Data center attribute is missing for node " + testNode);
 
                     if (nodeDcAttr.equals(dcAttr)) {
                         dcCnt++;
 
-                        if (dcCnt > maxAllowed)
-                            return false;
+                        if (dcCnt >= maxAllowed)
+                            break;
                     }
                 }
 
-                return true;
+                return dcCnt < maxAllowed;
             }
         });
 
@@ -510,6 +594,29 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
      */
     private long hash(Integer part, Object obj) {
         return xorshift64star(((long)part << 32) | obj.hashCode());
+
+//        MessageDigest d = digest.get();
+//
+//        ByteArrayOutputStream out = new ByteArrayOutputStream();
+//
+//        out.write(U.intToBytes(part), 0, 4); // Avoid IOException.
+//        out.write(U.intToBytes(obj.hashCode()), 0, 4); // Avoid IOException.
+//
+//        d.reset();
+//
+//        byte[] bytes = d.digest(out.toByteArray());
+//
+//        long hash =
+//            (bytes[0] & 0xFFL)
+//                | ((bytes[1] & 0xFFL) << 8)
+//                | ((bytes[2] & 0xFFL) << 16)
+//                | ((bytes[3] & 0xFFL) << 24)
+//                | ((bytes[4] & 0xFFL) << 32)
+//                | ((bytes[5] & 0xFFL) << 40)
+//                | ((bytes[6] & 0xFFL) << 48)
+//                | ((bytes[7] & 0xFFL) << 56);
+//
+//        return hash;
     }
 
     public static long xorshift64star(long x) {
