@@ -301,6 +301,33 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     }
 
     /**
+     * Add cell to topology. Nodes are entering each DC sequentially.
+     * @param assignment Assignment.
+     * @param zone Zone.
+     * @param cell Cell.
+     * @param nodesPerCell Nodes per cell.
+     * TODO add to tests. Also test adding nodes randomly.
+     */
+    public void addCell2(Assignment assignment, Object zone, Object cell, int nodesPerCell) {
+        int nodesInDc = nodesPerCell/DATA_CENTERS;
+
+        for (int dc = 0; dc < DATA_CENTERS; dc++) {
+            for (int c = 0; c < nodesInDc; c++) {
+                ClusterNode node = createNode(zone, "dc" + dc, cell);
+
+                assignment.topology.add(node);
+
+                DiscoveryEvent discoEvt = new DiscoveryEvent(node, "", EventType.EVT_NODE_JOINED, node);
+
+                GridAffinityFunctionContextImpl ctx =
+                    new GridAffinityFunctionContextImpl(assignment.topology, assignment.assignment, discoEvt, new AffinityTopologyVersion(assignment.version++), BACKUPS);
+
+                assignment.assignment = affinity.assignPartitions(ctx);
+            }
+        }
+    }
+
+    /**
      * Remove cell to topology.
      * @param assignment Assignment.
      * @param zone Zone.
