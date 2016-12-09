@@ -133,9 +133,9 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     }
 
     /**
-     * Tests partition distribution in zone with several cells.
+     * Tests partition distribution in different zones with several cells.
      */
-    public void testDistribution() {
+    public void testMultiZoneDistribution() {
         int cells = 3;
 
         long t1 = System.nanoTime();
