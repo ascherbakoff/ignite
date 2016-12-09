@@ -126,8 +126,6 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         }
     }
 
-
-
     /**
      * TODO
      */
@@ -185,6 +183,49 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     }
 
     /**
+     * Tests partition distribution while adding cells to zones.
+     */
+    public void testZoneDistribution() {
+        Assignment assignment = new Assignment();
+
+        Object zone = ZONES[3];
+
+        int cellsToAdd = 3;
+
+        for (int i = 0; i < cellsToAdd; i++) {
+            String cell = "cell" + i;
+
+            log().info("Adding cell " + i);
+
+            addCell(assignment, zone, cell, CELL_SIZE);
+
+            int validateCnt = i + 1;
+
+            for (int j = 0; j < validateCnt; j++) {
+                String filterCell = "cell" + j;
+
+                // Get cell nodes.
+                List<ClusterNode> nodes = IgniteUtils.arrayList(
+                    assignment.topology,
+                    new NodeAttributeFilter(CustomPrimaryFilter.ZONE_ATTR, zone),
+                    new NodeAttributeFilter(CustomPrimaryFilter.CELL_ATTR, filterCell));
+
+                validateCell(filterCell, nodes);
+
+                validateCellDistribution(zone, i + 1, nodes, assignment);
+            }
+        }
+
+        List<Integer> range = ZONE_TO_PART_MAP.get(zone);
+
+        int start = range.get(0);
+        int end = start + range.get(1);
+
+        for (int part = start; part < end; part++)
+            validatePartition(part, assignment);
+    }
+
+    /**
      * @param zones Zones.
      * @param cells Cells per DC.
      * @param nodesPerCell Nodes per cell.
@@ -193,8 +234,6 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         int top = 0;
 
         Assignment a = new Assignment();
-
-        a.topology = new ArrayList<>(zones * cells * nodesPerCell);
 
         for (int z = 0; z < zones; z++) {
             int dc = 0;
@@ -219,12 +258,38 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     }
 
     /**
+     * Add cell to topology. Nodes are split equally between data centers.
+     * @param assignment Assignment.
+     * @param zone Zone.
+     * @param cell Cell.
+     * @param nodesPerCell Nodes per cell.
+     */
+    public void addCell(Assignment assignment, Object zone, Object cell, int nodesPerCell) {
+        int top = 0;
+
+        int dc = 0;
+
+        for (int n = 0; n < nodesPerCell; n++) {
+            ClusterNode node = createNode(zone, "dc" + (dc++ % DATA_CENTERS), cell);
+
+            assignment.topology.add(node);
+
+            DiscoveryEvent discoEvt = new DiscoveryEvent(node, "", EventType.EVT_NODE_JOINED, node);
+
+            GridAffinityFunctionContextImpl ctx =
+                new GridAffinityFunctionContextImpl(assignment.topology, null, discoEvt, new AffinityTopologyVersion(top++), BACKUPS);
+
+            assignment.assignment = affinity.assignPartitions(ctx);
+        }
+    }
+
+    /**
      * Assignment info.
      */
     private static class Assignment {
         public List<List<ClusterNode>> assignment;
 
-        public List<ClusterNode> topology;
+        public List<ClusterNode> topology = new ArrayList<>();
     }
 
     /**
@@ -391,6 +456,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
 
         log().info("max=" + max + ", min=" + min + ", ideal=" + ideal + ", minDev=" + deviation(min, ideal) + "%, " +
             "maxDev=" + deviation(max, ideal) + "%");
+
+        // TODO validate total summary assigned partitions count and expected partition count for zone.
 
         return mapping;
     }
