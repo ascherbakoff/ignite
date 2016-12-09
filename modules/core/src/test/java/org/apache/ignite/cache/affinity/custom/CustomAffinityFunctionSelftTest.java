@@ -33,9 +33,6 @@ import java.util.TreeMap;
 import java.util.UUID;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteException;
-import org.apache.ignite.cache.affinity.AffinityFunction;
-import org.apache.ignite.cache.affinity.AffinityPrimaryFilter;
-import org.apache.ignite.cache.affinity.rendezvous.RendezvousAffinityFunction;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.events.DiscoveryEvent;
 import org.apache.ignite.events.EventType;
@@ -43,7 +40,6 @@ import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.affinity.GridAffinityFunctionContextImpl;
 import org.apache.ignite.internal.util.IgniteUtils;
 import org.apache.ignite.internal.util.typedef.internal.U;
-import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgnitePredicate;
 import org.apache.ignite.testframework.GridTestNode;
 import org.apache.ignite.testframework.GridTestUtils;
@@ -64,14 +60,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     /** Backups. */
     public static final int BACKUPS = 3;
 
-    /** Zone attribute. */
-    public static final String ZONE_ATTR = "zone";
-
-    /** Cell attribute. */
-    public static final String CELL_ATTR = "cell";
-
-    /** Data center attribute. */
-    public static final String DC_ATTR = "dc";
+    /** Data centers. */
+    public static final int DATA_CENTERS = 2;
 
     /** Zones. */
     public static final Object[] ZONES = new String[] {
@@ -98,7 +88,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     /** Ignite. */
     private static Ignite ignite;
 
-    private AffinityFunction aff;
+    /** Affinity. */
+    private CustomRendezvousAffinityFunction affinity;
 
     /** {@inheritDoc} */
     @Override protected void beforeTestsStarted() throws Exception {
@@ -110,24 +101,11 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         stopAllGrids();
     }
 
+    /** {@inheritDoc} */
     @Override protected void beforeTest() throws Exception {
         super.beforeTest();
 
-        aff = affinityFunction();
-    }
-
-    /**
-     * @param part Partition. TODO use indexed search.
-     */
-    private Object partToZone(int part) {
-        for (Map.Entry<Object, List<Integer>> entry : ZONE_TO_PART_MAP.entrySet()) {
-            List<Integer> val = entry.getValue();
-
-            if (val.get(0) <= part && part < val.get(0) + val.get(1))
-                return entry.getKey();
-        }
-
-        throw new IgniteException("Failed to find zone for partition");
+        affinity = affinityFunction();
     }
 
     /**
@@ -136,7 +114,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     public void testKeySplitBetweenZones() {
         for (Map.Entry<Object, List<Integer>> entry : ZONE_TO_PART_MAP.entrySet()) {
             for (int i = 0; i < 10_000; i++) {
-                int part = aff.partition(new TestKey(i, entry.getKey()));
+                int part = affinity.partition(new TestKey(i, entry.getKey()));
 
                 List<Integer> vals = ZONE_TO_PART_MAP.get(entry.getKey());
 
@@ -148,79 +126,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         }
     }
 
-    /**
-     * Tests assignment in zone.
-     */
-    public void testZoneAssignemnt() {
-        Assignment assignment = createAssignment(ZONES.length, 1, 1);
 
-        printAssignment(assignment.assignment, BACKUPS, PARTS_COUNT);
-    }
-
-    /**
-     * @param zones Zones.
-     * @param cells Cells per DC.
-     * @param nodesPerCell Nodes per cell.
-     */
-    public Assignment createAssignment(int zones, int cells, int nodesPerCell) {
-        int top = 0;
-
-        Assignment a = new Assignment();
-
-        a.topology = new ArrayList<>(zones * cells * nodesPerCell);
-
-        for (int z = 0; z < zones; z++) {
-            int dc = 0;
-
-            for (int c = 0; c < cells; c++) {
-                for (int n = 0; n < nodesPerCell; n++) {
-                    ClusterNode node = createNode(ZONES[z], "dc" + (dc++ % 2), "cell" + c);
-
-                    a.topology.add(node);
-
-                    DiscoveryEvent discoEvt = new DiscoveryEvent(node, "", EventType.EVT_NODE_JOINED, node);
-
-                    GridAffinityFunctionContextImpl ctx =
-                        new GridAffinityFunctionContextImpl(a.topology, null, discoEvt, new AffinityTopologyVersion(top++), BACKUPS);
-
-                    a.assignment = aff.assignPartitions(ctx);
-                }
-            }
-        }
-
-        return a;
-    }
-
-    /**
-     * Assignment info.
-     */
-    private static class Assignment {
-        public List<List<ClusterNode>> assignment;
-
-        public List<ClusterNode> topology;
-    }
-
-    /**
-     * @param zone Zone.
-     * @param dataCenterId Data center id.
-     * @param cellId Cell id.
-     */
-    private ClusterNode createNode(Object zone, Object dataCenterId, Object cellId) {
-        GridTestNode node = new GridTestNode(UUID.randomUUID());
-
-        node.setAttribute(ZONE_ATTR, zone);
-        node.setAttribute(DC_ATTR, dataCenterId);
-        node.setAttribute(CELL_ATTR, cellId);
-
-        return node;
-    }
-
-    private void printAssignment(List<List<ClusterNode>> assignment, int backups, int partitions) {
-        for (int part = 0; part < assignment.size(); part++) {
-            for (ClusterNode node : assignment.get(part))
-                System.out.println("[Part=" + part + ", Zone=" + node.attribute(ZONE_ATTR) + ", Cell=" + node.attribute(CELL_ATTR));
-        }
-    }
 
     /**
      * TODO
@@ -254,8 +160,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
 
                 List<ClusterNode> nodes = IgniteUtils.arrayList(
                     assignment.topology,
-                    new NodeAttributeFilter(ZONE_ATTR, zone),
-                    new NodeAttributeFilter(CELL_ATTR, cell));
+                    new NodeAttributeFilter(CustomPrimaryFilter.ZONE_ATTR, zone),
+                    new NodeAttributeFilter(CustomPrimaryFilter.CELL_ATTR, cell));
 
                 validateCell(cell, nodes);
 
@@ -279,6 +185,73 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     }
 
     /**
+     * @param zones Zones.
+     * @param cells Cells per DC.
+     * @param nodesPerCell Nodes per cell.
+     */
+    public Assignment createAssignment(int zones, int cells, int nodesPerCell) {
+        int top = 0;
+
+        Assignment a = new Assignment();
+
+        a.topology = new ArrayList<>(zones * cells * nodesPerCell);
+
+        for (int z = 0; z < zones; z++) {
+            int dc = 0;
+
+            for (int c = 0; c < cells; c++) {
+                for (int n = 0; n < nodesPerCell; n++) {
+                    ClusterNode node = createNode(ZONES[z], "dc" + (dc++ % DATA_CENTERS), "cell" + c);
+
+                    a.topology.add(node);
+
+                    DiscoveryEvent discoEvt = new DiscoveryEvent(node, "", EventType.EVT_NODE_JOINED, node);
+
+                    GridAffinityFunctionContextImpl ctx =
+                        new GridAffinityFunctionContextImpl(a.topology, null, discoEvt, new AffinityTopologyVersion(top++), BACKUPS);
+
+                    a.assignment = affinity.assignPartitions(ctx);
+                }
+            }
+        }
+
+        return a;
+    }
+
+    /**
+     * Assignment info.
+     */
+    private static class Assignment {
+        public List<List<ClusterNode>> assignment;
+
+        public List<ClusterNode> topology;
+    }
+
+    /**
+     * @param zone Zone.
+     * @param dataCenterId Data center id.
+     * @param cellId Cell id.
+     */
+    private ClusterNode createNode(Object zone, Object dataCenterId, Object cellId) {
+        GridTestNode node = new GridTestNode(UUID.randomUUID());
+
+        node.setAttribute(CustomPrimaryFilter.ZONE_ATTR, zone);
+        node.setAttribute(CustomPrimaryFilter.CELL_ATTR, cellId);
+        node.setAttribute(CustomBackupFilter.DC_ATTR, dataCenterId);
+
+        return node;
+    }
+
+    private void printAssignment(List<List<ClusterNode>> assignment, int backups, int partitions) {
+        for (int part = 0; part < assignment.size(); part++) {
+            for (ClusterNode node : assignment.get(part))
+                System.out.println("[Part=" + part + ", Zone=" +
+                    node.attribute(CustomPrimaryFilter.ZONE_ATTR) + ", Cell=" +
+                    node.attribute(CustomPrimaryFilter.CELL_ATTR));
+        }
+    }
+
+    /**
      * @param cell Cell.
      * @param nodes Nodes.
      */
@@ -288,11 +261,11 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         Map<Object, Integer> cnt = new HashMap<>();
 
         for (ClusterNode node : nodes) {
-            Object cellId = node.attribute(CELL_ATTR);
+            Object cellId = node.attribute(CustomPrimaryFilter.CELL_ATTR);
 
             assertEquals("Valid cell", cell, cellId);
 
-            Object dcId = node.attribute(DC_ATTR);
+            Object dcId = node.attribute(CustomBackupFilter.DC_ATTR);
 
             updateCounter(cnt, dcId, 1);
         }
@@ -338,7 +311,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         Map<Object, Integer> cnt = new HashMap<>();
 
         for (ClusterNode node : nodes) {
-            Object dcId = node.attribute(DC_ATTR);
+            Object dcId = node.attribute(CustomBackupFilter.DC_ATTR);
 
             updateCounter(cnt, dcId, 1);
         }
@@ -454,8 +427,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     /**
      * Affinity function to test.
      */
-    protected AffinityFunction affinityFunction() {
-        RendezvousAffinityFunction function = new RendezvousAffinityFunction(false, PARTS_COUNT) {
+    protected CustomRendezvousAffinityFunction affinityFunction() {
+        CustomRendezvousAffinityFunction function = new CustomRendezvousAffinityFunction(false, PARTS_COUNT) {
             @Override public int partition(Object key) {
                 if (key instanceof TestKey) {
                     TestKey testKey = (TestKey)key;
@@ -472,157 +445,24 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
             }
         };
 
-        function.setAffinityPrimaryFilter(new AffinityPrimaryFilter() {
-            @Override public List<ClusterNode> apply(Integer part, List<ClusterNode> currTopNodes) {
-                Object zone = partToZone(part);
+        function.setAffinityPrimaryFilter(new CustomPrimaryFilter() {
+            @Override protected Object partToZone(Integer part) {
+                for (Map.Entry<Object, List<Integer>> entry : ZONE_TO_PART_MAP.entrySet()) {
+                    List<Integer> val = entry.getValue();
 
-                // Prepare the list of nodes belonging to zone.
-                List<ClusterNode> zoneNodes = new ArrayList<>();
-
-                List<Object> cells = new ArrayList<>();
-
-                for (ClusterNode node : currTopNodes) {
-                    Object nodeZone = node.attribute(ZONE_ATTR);
-
-                    //A.notNull(zone, String.format(ATTR_REQ_MSG, "Zone", node));
-
-                    if (zone.equals(nodeZone)) {
-                        zoneNodes.add(node);
-
-                        Object nodeCell = node.attribute(CELL_ATTR);
-
-                        if (!cells.contains(nodeCell))
-                            cells.add(nodeCell);
-                    }
+                    if (val.get(0) <= part && part < val.get(0) + val.get(1))
+                        return entry.getKey();
                 }
 
-                int size = zoneNodes.size();
-
-                if (size == 0)
-                    return Collections.emptyList();
-
-                // Get cell for partition
-                long hash = Long.MIN_VALUE;
-
-                Object cell = null;
-
-                for (Object testCell : cells) {
-                    long cellHash = hash(part, testCell);
-
-                    if (cellHash > hash) {
-                        cell = testCell;
-
-                        hash = cellHash;
-                    }
-                }
-
-                List<ClusterNode> cellNodes = new ArrayList<>();
-
-                // Return nodes belonging to selected cell.
-                for (ClusterNode node : zoneNodes) {
-                    Object nodeCell = node.attribute(CELL_ATTR);
-
-                    //A.notNull(nodeCell, String.format(ATTR_REQ_MSG, "Cell", node));
-
-                    if (nodeCell.equals(cell))
-                        cellNodes.add(node);
-                }
-
-                return cellNodes;
+                throw new IgniteException("Failed to find zone for partition");
             }
         });
 
-        function.setAffinityBackupFilter(new IgniteBiPredicate<ClusterNode, List<ClusterNode>>() {
-            @Override public boolean apply(ClusterNode testNode, List<ClusterNode> primaryAndBackupNodes) {
-                if (primaryAndBackupNodes.size() >= BACKUPS + 1)
-                    return false;
+        function.setAffinityBackupFilter(new CustomBackupFilter(BACKUPS, DATA_CENTERS));
 
-                //A.notNull(primDc, "Data center attribute is missing for node " + prim);
-
-                Object dcAttr = testNode.attribute(DC_ATTR);
-
-                //A.notNull(dcAttr, "Data center attribute is missing for node " + prim);
-
-                // Enforce rule: equal number of nodes hosting partition in each DC
-                int dcCnt = 0;
-
-                int maxAllowed = (BACKUPS + 1) / 2;
-
-                for (ClusterNode clusterNode : primaryAndBackupNodes) {
-                    Object nodeDcAttr = clusterNode.attribute(DC_ATTR);
-
-                    //A.notNull(nodeDcAttr, "Data center attribute is missing for node " + testNode);
-
-                    if (nodeDcAttr.equals(dcAttr)) {
-                        dcCnt++;
-
-                        if (dcCnt >= maxAllowed)
-                            break;
-                    }
-                }
-
-                return dcCnt < maxAllowed;
-            }
-        });
-
-        GridTestUtils.setFieldValue(function, RendezvousAffinityFunction.class, "ignite", ignite);
+        GridTestUtils.setFieldValue(function, CustomRendezvousAffinityFunction.class, "ignite", ignite);
 
         return function;
-    }
-
-    public void testHash() {
-        int r1 = 0;
-        int r2 = 0;
-        for (int i = 400; i < 1000; i++) {
-            long h1 = hash(i, "cell0");
-
-            long h2 = hash(i, "cell1");
-
-            if (h1 > h2)
-                r1++;
-            else
-                r2++;
-        }
-
-        System.out.println("r1=" + r1 + ", r2=" + r2);
-    }
-
-    /**
-     * @param part Partition.
-     * @param obj Object.
-     */
-    private long hash(Integer part, Object obj) {
-        return xorshift64star(((long)part << 32) | obj.hashCode());
-
-//        MessageDigest d = digest.get();
-//
-//        ByteArrayOutputStream out = new ByteArrayOutputStream();
-//
-//        out.write(U.intToBytes(part), 0, 4); // Avoid IOException.
-//        out.write(U.intToBytes(obj.hashCode()), 0, 4); // Avoid IOException.
-//
-//        d.reset();
-//
-//        byte[] bytes = d.digest(out.toByteArray());
-//
-//        long hash =
-//            (bytes[0] & 0xFFL)
-//                | ((bytes[1] & 0xFFL) << 8)
-//                | ((bytes[2] & 0xFFL) << 16)
-//                | ((bytes[3] & 0xFFL) << 24)
-//                | ((bytes[4] & 0xFFL) << 32)
-//                | ((bytes[5] & 0xFFL) << 40)
-//                | ((bytes[6] & 0xFFL) << 48)
-//                | ((bytes[7] & 0xFFL) << 56);
-//
-//        return hash;
-    }
-
-    public static long xorshift64star(long x) {
-        x ^= x >>> 12; // a
-        x ^= x << 25; // b
-        x ^= x >>> 27; // c
-        return x * 2685821657736338717L;
     }
 
     /**
