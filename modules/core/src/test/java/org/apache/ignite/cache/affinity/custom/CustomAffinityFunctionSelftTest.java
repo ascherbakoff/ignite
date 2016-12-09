@@ -170,7 +170,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
                 assertEquals("Cell size", CELL_SIZE, nodes.size());
             }
 
-            validatePartitions(mappings);
+            validateIntersectionsBetweenCells(mappings);
 
             List<Integer> range = ZONE_TO_PART_MAP.get(zone);
 
@@ -199,6 +199,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
 
             addCell(assignment, zone, cell, CELL_SIZE);
 
+            validateZone(assignment, zone);
+
             int validateCnt = i + 1;
 
             for (int j = 0; j < validateCnt; j++) {
@@ -216,13 +218,30 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
             }
         }
 
-        List<Integer> range = ZONE_TO_PART_MAP.get(zone);
+        int cellsCnt = 3;
 
-        int start = range.get(0);
-        int end = start + range.get(1);
+        // Removing first two cells.
+        for (int i = 0; i < cellsCnt - 1; i++) {
+            String cell = "cell" + i;
 
-        for (int part = start; part < end; part++)
-            validatePartition(part, assignment);
+            log().info("Removing cell " + i);
+
+            removeCell(assignment, zone, cell);
+
+            for (int j = i+1; j < cellsCnt; j++) {
+                String filterCell = "cell" + j;
+
+                // Get cell nodes.
+                List<ClusterNode> nodes = IgniteUtils.arrayList(
+                    assignment.topology,
+                    new NodeAttributeFilter(CustomPrimaryFilter.ZONE_ATTR, zone),
+                    new NodeAttributeFilter(CustomPrimaryFilter.CELL_ATTR, filterCell));
+
+                validateCell(filterCell, nodes);
+
+                validateCellDistribution(zone, cellsCnt - i - 1, nodes, assignment);
+            }
+        }
     }
 
     /**
@@ -265,8 +284,6 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
      * @param nodesPerCell Nodes per cell.
      */
     public void addCell(Assignment assignment, Object zone, Object cell, int nodesPerCell) {
-        int top = 0;
-
         int dc = 0;
 
         for (int n = 0; n < nodesPerCell; n++) {
@@ -277,9 +294,33 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
             DiscoveryEvent discoEvt = new DiscoveryEvent(node, "", EventType.EVT_NODE_JOINED, node);
 
             GridAffinityFunctionContextImpl ctx =
-                new GridAffinityFunctionContextImpl(assignment.topology, null, discoEvt, new AffinityTopologyVersion(top++), BACKUPS);
+                new GridAffinityFunctionContextImpl(assignment.topology, assignment.assignment, discoEvt, new AffinityTopologyVersion(assignment.version++), BACKUPS);
 
             assignment.assignment = affinity.assignPartitions(ctx);
+        }
+    }
+
+    /**
+     * Remove cell to topology.
+     * @param assignment Assignment.
+     * @param zone Zone.
+     * @param cell Cell.
+     */
+    public void removeCell(Assignment assignment, Object zone, Object cell) {
+        // Get cell nodes.
+        List<ClusterNode> nodes = IgniteUtils.arrayList(
+            assignment.topology,
+            new NodeAttributeFilter(CustomPrimaryFilter.ZONE_ATTR, zone),
+            new NodeAttributeFilter(CustomPrimaryFilter.CELL_ATTR, cell));
+
+        for (ClusterNode node : nodes) {
+            assignment.topology.remove(node);
+
+            DiscoveryEvent discoEvt = new DiscoveryEvent(node, "", EventType.EVT_NODE_LEFT, node);
+
+            assignment.assignment = affinity.assignPartitions(
+                new GridAffinityFunctionContextImpl(assignment.topology, assignment.assignment, discoEvt, new AffinityTopologyVersion(assignment.version++),
+                    BACKUPS));
         }
     }
 
@@ -290,6 +331,8 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
         public List<List<ClusterNode>> assignment;
 
         public List<ClusterNode> topology = new ArrayList<>();
+
+        public int version;
     }
 
     /**
@@ -346,9 +389,9 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     /**
      * Validates what mappings have no common partitions
      *
-     * @param mappings Mappings.
+     * @param mappings Mappings for each cell.
      */
-    private void validatePartitions(List<Map<UUID, Collection<Integer>>> mappings) {
+    private void validateIntersectionsBetweenCells(List<Map<UUID, Collection<Integer>>> mappings) {
         if (mappings.size() == 1)
             return;
 
@@ -389,6 +432,20 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
 
         boolean equals = cnt.get(k1).equals(cnt.get(k2));
         assertTrue("Nodes distribution", equals);
+    }
+
+    /**
+     * @param assignment Assignment.
+     * @param zone Zone.
+     */
+    private void validateZone(Assignment assignment, Object zone) {
+        List<Integer> range = ZONE_TO_PART_MAP.get(zone);
+
+        int start = range.get(0);
+        int end = start + range.get(1);
+
+        for (int part = start; part < end; part++)
+            validatePartition(part, assignment);
     }
 
     /**
