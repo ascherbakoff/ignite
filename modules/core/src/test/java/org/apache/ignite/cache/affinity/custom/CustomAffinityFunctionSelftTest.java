@@ -17,7 +17,6 @@
 
 package org.apache.ignite.cache.affinity.custom;
 
-import java.io.ByteArrayOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -43,7 +42,6 @@ import org.apache.ignite.events.EventType;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.affinity.GridAffinityFunctionContextImpl;
 import org.apache.ignite.internal.util.IgniteUtils;
-import org.apache.ignite.internal.util.typedef.internal.A;
 import org.apache.ignite.internal.util.typedef.internal.U;
 import org.apache.ignite.lang.IgniteBiPredicate;
 import org.apache.ignite.lang.IgnitePredicate;
@@ -234,7 +232,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
      * Tests partition distribution in zone with several cells.
      */
     public void testDistribution() {
-        int cells = 1;
+        int cells = 3;
 
         long t1 = System.nanoTime();
 
@@ -246,37 +244,38 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
 
         assertEquals("Topology size", ZONES.length * cells * CELL_SIZE, assignment.topology.size());
 
-        //for (Object zone : ZONES) {
-        Object zone = ZONES[3];
+        for (Object zone : ZONES) {
+            log().info("Processing zone " + zone);
 
-        List<Map<UUID, Collection<Integer>>> mappings = new ArrayList<>();
+            List<Map<UUID, Collection<Integer>>> mappings = new ArrayList<>();
 
-        for (int c = 0; c < cells; c++) {
-            String cell = "cell" + c;
+            for (int c = 0; c < cells; c++) {
+                String cell = "cell" + c;
 
-            List<ClusterNode> nodes = IgniteUtils.arrayList(
-                assignment.topology,
-                new NodeAttributeFilter(ZONE_ATTR, zone),
-                new NodeAttributeFilter(CELL_ATTR, cell));
+                List<ClusterNode> nodes = IgniteUtils.arrayList(
+                    assignment.topology,
+                    new NodeAttributeFilter(ZONE_ATTR, zone),
+                    new NodeAttributeFilter(CELL_ATTR, cell));
 
-            validateCell(cell, nodes);
+                validateCell(cell, nodes);
 
-            Map<UUID, Collection<Integer>> mapping = validateCellDistribution(zone, cells, nodes, assignment);
+                Map<UUID, Collection<Integer>> mapping = validateCellDistribution(zone, cells, nodes, assignment);
 
-            mappings.add(mapping);
+                mappings.add(mapping);
 
-            assertEquals("Cell size", CELL_SIZE, nodes.size());
+                assertEquals("Cell size", CELL_SIZE, nodes.size());
+            }
+
+            validatePartitions(mappings);
+
+            List<Integer> range = ZONE_TO_PART_MAP.get(zone);
+
+            int start = range.get(0);
+            int end = start + range.get(1);
+
+            for (int part = start; part < end; part++)
+                validatePartition(part, assignment);
         }
-
-        validatePartitions(mappings);
-
-        List<Integer> range = ZONE_TO_PART_MAP.get(zone);
-
-        int start = range.get(0);
-        int end = start + range.get(1);
-
-        for (int part = start; part < end; part++)
-            validatePartition(part, assignment);
     }
 
     /**
@@ -417,7 +416,7 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
             min = Math.min(min, parts.size());
         }
 
-        log().warning("max=" + max + ", min=" + min + ", ideal=" + ideal + ", minDev=" + deviation(min, ideal) + "%, " +
+        log().info("max=" + max + ", min=" + min + ", ideal=" + ideal + ", minDev=" + deviation(min, ideal) + "%, " +
             "maxDev=" + deviation(max, ideal) + "%");
 
         return mapping;
