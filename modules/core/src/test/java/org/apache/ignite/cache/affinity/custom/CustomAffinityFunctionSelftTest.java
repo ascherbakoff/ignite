@@ -127,12 +127,6 @@ public class CustomAffinityFunctionSelftTest extends GridCommonAbstractTest {
     }
 
     /**
-     * TODO
-     */
-    public void testEmptyZones() {
-    }
-
-    /**
      * Tests partition distribution in different zones with several cells.
      */
     public void testMultiZoneDistribution() {
