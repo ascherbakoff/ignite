@@ -19,7 +19,9 @@ package org.apache.ignite.internal.processors.cache.distributed;
 
 import java.io.Externalizable;
 import java.nio.ByteBuffer;
+import org.apache.ignite.IgniteLogger;
 import org.apache.ignite.internal.processors.cache.GridCacheMessage;
+import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
 import org.apache.ignite.internal.processors.cache.version.GridCacheVersion;
 import org.apache.ignite.internal.util.tostring.GridToStringBuilder;
 import org.apache.ignite.lang.IgniteUuid;
@@ -76,6 +78,17 @@ public class GridDistributedTxFinishResponse extends GridCacheMessage {
     /** {@inheritDoc} */
     @Override public boolean addDeploymentInfo() {
         return false;
+    }
+
+    /** {@inheritDoc} */
+    @Override public IgniteLogger messageLogger(GridCacheSharedContext ctx) {
+        return ctx.txFinishMessageLogger();
+    }
+
+    /** {@inheritDoc} */
+    @Override public int partition() {
+        // TODO https://issues.apache.org/jira/browse/IGNITE-4371
+        return Integer.MIN_VALUE;
     }
 
     /** {@inheritDoc} */

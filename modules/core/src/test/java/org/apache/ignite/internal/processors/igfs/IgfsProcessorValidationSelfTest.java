@@ -228,38 +228,42 @@ public class IgfsProcessorValidationSelfTest extends IgfsCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
-    public void testLocalIfOffheapIsDisabledAndMaxSpaceSizeIsGreater() throws Exception {
-        g1Cfg.setCacheConfiguration(concat(dataCaches(1024), metaCaches(), CacheConfiguration.class));
-
-        g1IgfsCfg2.setMaxSpaceSize(999999999999999999L);
-
-        checkGridStartFails(g1Cfg, "Maximum IGFS space size cannot be greater that size of available heap", true);
-    }
-
-    /**
-     * @throws Exception If failed.
-     */
-    public void testLocalIfOffheapIsEnabledAndMaxSpaceSizeIsGreater() throws Exception {
-        g1Cfg.setCacheConfiguration(concat(dataCaches(1024), metaCaches(), CacheConfiguration.class));
-
-        for (CacheConfiguration cc : g1Cfg.getCacheConfiguration())
-            cc.setOffHeapMaxMemory(1000000);
-
-        g1IgfsCfg2.setMaxSpaceSize(999999999999999999L);
-
-        checkGridStartFails(g1Cfg,
-            "Maximum IGFS space size cannot be greater than size of available heap memory and offheap storage", true);
-    }
-
-    /**
-     * @throws Exception If failed.
-     */
     public void testLocalIfNonPrimaryModeAndHadoopFileSystemUriIsNull() throws Exception {
         g1Cfg.setCacheConfiguration(concat(dataCaches(1024), metaCaches(), CacheConfiguration.class));
 
         g1IgfsCfg2.setDefaultMode(PROXY);
 
         checkGridStartFails(g1Cfg, "secondaryFileSystem cannot be null when mode is not PRIMARY", true);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testLocalIfMetaCacheNameEquals() throws Exception {
+        g1Cfg.setCacheConfiguration(concat(dataCaches(1024), metaCaches(), CacheConfiguration.class));
+
+        g1IgfsCfg1.setDataCacheName(dataCache1Name);
+        g1IgfsCfg1.setMetaCacheName(metaCache1Name);
+
+        g1IgfsCfg2.setDataCacheName(dataCache2Name);
+        g1IgfsCfg2.setMetaCacheName(metaCache1Name);
+
+        checkGridStartFails(g1Cfg, "Meta cache names should be different for different IGFS instances", true);
+    }
+
+    /**
+     * @throws Exception If failed.
+     */
+    public void testLocalIfDataCacheNameEquals() throws Exception {
+        g1Cfg.setCacheConfiguration(concat(dataCaches(1024), metaCaches(), CacheConfiguration.class));
+
+        g1IgfsCfg1.setDataCacheName(dataCache1Name);
+        g1IgfsCfg1.setMetaCacheName(metaCache1Name);
+
+        g1IgfsCfg2.setDataCacheName(dataCache1Name);
+        g1IgfsCfg2.setMetaCacheName(metaCache2Name);
+
+        checkGridStartFails(g1Cfg, "Data cache names should be different for different IGFS instances", true);
     }
 
     /**
