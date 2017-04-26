@@ -28,6 +28,7 @@ import java.util.UUID;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
 import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtPartitionState;
+import org.apache.ignite.internal.util.GridPartitionStateMap;
 import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.internal.util.typedef.internal.U;
 
@@ -81,7 +82,7 @@ public class GridDhtPartitionMap implements Comparable<GridDhtPartitionMap>, Ext
         this.updateSeq = updateSeq;
         this.top = top;
 
-        map = U.newHashMap(m.size());
+        map = new GridPartitionStateMap(m.size());
 
         for (Map.Entry<Integer, GridDhtPartitionState> e : m.entrySet()) {
             GridDhtPartitionState state = e.getValue();
@@ -117,7 +118,7 @@ public class GridDhtPartitionMap implements Comparable<GridDhtPartitionMap>, Ext
         return new GridDhtPartitionMap(nodeId,
             updateSeq,
             top,
-            U.<Integer, GridDhtPartitionState>newHashMap(0),
+            new GridPartitionStateMap(0),
             0);
     }
 
