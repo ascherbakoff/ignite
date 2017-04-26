@@ -67,14 +67,17 @@ public class GridPartitionMapSelfTest extends GridCommonAbstractTest {
             entry.setValue(GridDhtPartitionState.LOST);
         }
 
-        for (GridDhtPartitionState state : map.values())
-            assertEquals(GridDhtPartitionState.LOST, state);
-
         for (Map.Entry<Integer, GridDhtPartitionState> entry : tmp)
             entry.setValue(GridDhtPartitionState.LOST);
 
         for (GridDhtPartitionState state : map.values())
             assertEquals(GridDhtPartitionState.LOST, state);
+
+        assertFalse(map.containsKey(10));
+
+        assertNull(map.remove(10));
+
+        assertEquals(10, map.size());
 
         map.remove(5);
 
