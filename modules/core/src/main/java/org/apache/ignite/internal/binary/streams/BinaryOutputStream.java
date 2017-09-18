@@ -229,6 +229,13 @@ public interface BinaryOutputStream extends BinaryStream, AutoCloseable {
     public void unsafeWriteInt(int val);
 
     /**
+     * Write packed int in unsafe mode.
+     *
+     * @param val Value.
+     */
+    public void unsafeWritePackedInt(int val);
+
+    /**
      * Write int in unsafe mode.
      *
      * @param pos Position.

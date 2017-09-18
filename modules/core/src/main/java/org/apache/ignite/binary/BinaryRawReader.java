@@ -51,6 +51,12 @@ public interface BinaryRawReader {
     public int readInt() throws BinaryObjectException;
 
     /**
+     * @return Integer value.
+     * @throws BinaryObjectException In case of error.
+     */
+    public int readPackedInt() throws BinaryObjectException;
+
+    /**
      * @return Long value.
      * @throws BinaryObjectException In case of error.
      */

@@ -131,6 +131,10 @@ public class BinaryByteBufferInputStream implements BinaryInputStream {
         return buf.getInt();
     }
 
+    @Override public int readPackedInt() {
+        return 0;
+    }
+
     /** {@inheritDoc} */
     @Override public int[] readIntArray(int cnt) {
         ensureHasData(4 * cnt);

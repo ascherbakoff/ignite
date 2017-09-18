@@ -263,6 +263,10 @@ public class PlatformOutputStreamImpl implements PlatformOutputStream {
         shift(4);
     }
 
+    @Override public void unsafeWritePackedInt(int val) {
+        // No-op.
+    }
+
     /** {@inheritDoc} */
     @Override public void unsafeWriteInt(int pos, int val) {
         GridUnsafe.putInt(data + pos, val);

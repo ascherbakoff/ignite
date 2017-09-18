@@ -1338,6 +1338,12 @@ public class BinaryWriterExImpl implements BinaryWriter, BinaryRawWriterEx, Obje
     }
 
     /** {@inheritDoc} */
+    @Override public void writePackedInt(int val) throws BinaryObjectException {
+        out.unsafeEnsure(packedIntLength(val));
+        out.unsafeWritePackedInt(val);
+    }
+
+    /** {@inheritDoc} */
     @Override public void writeLong(String fieldName, long val) throws BinaryObjectException {
         writeFieldId(fieldName);
         writeLongField(val);
@@ -1909,5 +1915,32 @@ public class BinaryWriterExImpl implements BinaryWriter, BinaryRawWriterEx, Obje
      */
     public BinaryContext context() {
         return ctx;
+    }
+
+
+    /**
+     * Returns the number of bytes that would be written by {@link #writeInt}.
+     *
+     * @param val the integer to be written.
+     * @return the number of bytes that would be used to write the given integer.
+     */
+    private static int packedIntLength(int val) {
+        if (val < -119)
+            val = -val - 119;
+        else if (val > 119)
+            val = val - 119;
+        else
+            return 1;
+
+        if ((val & 0xFFFFFF00) == 0)
+            return 2;
+
+        if ((val & 0xFFFF0000) == 0)
+            return 3;
+
+        if ((val & 0xFF000000) == 0)
+            return 4;
+
+        return 5;
     }
 }

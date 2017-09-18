@@ -101,6 +101,13 @@ public interface BinaryInputStream extends BinaryStream, BinaryPositionReadable 
     public int readInt();
 
     /**
+     * Read packed int value.
+     *
+     * @return Int value.
+     */
+    public int readPackedInt();
+
+    /**
      * Read int array.
      *
      * @param cnt Expected item count.

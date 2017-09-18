@@ -134,6 +134,38 @@ public abstract class BinaryAbstractInputStream extends BinaryAbstractStream
     }
 
     /** {@inheritDoc} */
+    @Override public int readPackedInt() {
+        boolean negative;
+        int byteLen;
+
+        int b1 = readByte();
+        if (b1 < -119) {
+            negative = true;
+            byteLen = -b1 - 119;
+        }
+        else if (b1 > 119) {
+            negative = false;
+            byteLen = b1 - 119;
+        }
+        else
+            return b1;
+
+        int val = readByte() & 0xFF;
+        if (byteLen > 1) {
+            val |= (readByte() & 0xFF) << 8;
+
+            if (byteLen > 2) {
+                val |= (readByte() & 0xFF) << 16;
+
+                if (byteLen > 3)
+                    val |= (readByte() & 0xFF) << 24;
+            }
+        }
+
+        return negative ? (-val - 119) : (val + 119);
+    }
+
+    /** {@inheritDoc} */
     @Override public int[] readIntArray(int cnt) {
         int len = cnt << 2;
 

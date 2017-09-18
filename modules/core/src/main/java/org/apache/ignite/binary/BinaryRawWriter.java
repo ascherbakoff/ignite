@@ -54,6 +54,12 @@ public interface BinaryRawWriter {
      * @param val Value to write.
      * @throws BinaryObjectException In case of error.
      */
+    public void writePackedInt(int val) throws BinaryObjectException;
+
+    /**
+     * @param val Value to write.
+     * @throws BinaryObjectException In case of error.
+     */
     public void writeLong(long val) throws BinaryObjectException;
 
     /**

@@ -56,7 +56,6 @@ import org.apache.ignite.binary.BinaryType;
 import org.apache.ignite.configuration.BinaryConfiguration;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.internal.GridKernalContext;
 import org.apache.ignite.internal.MarshallerPlatformIds;
 import org.apache.ignite.internal.binary.builder.BinaryBuilderEnum;
 import org.apache.ignite.internal.binary.builder.BinaryObjectBuilderImpl;
@@ -881,6 +880,7 @@ public class BinaryObjectBuilderAdditionalSelfTest extends GridCommonAbstractTes
 
         obj.s = "a";
         obj.sRaw = "aa";
+        obj.i = 10;
 
         BinaryObjectBuilderImpl mutableObj = wrap(obj);
 
@@ -889,6 +889,7 @@ public class BinaryObjectBuilderAdditionalSelfTest extends GridCommonAbstractTes
         GridBinaryMarshalerAwareTestClass res = mutableObj.build().deserialize();
         assertEquals("z", res.s);
         assertEquals("aa", res.sRaw);
+        assertEquals(10, res.i);
     }
 
     /**

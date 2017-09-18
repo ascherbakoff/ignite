@@ -202,6 +202,10 @@ public class BinaryOffheapOutputStream extends BinaryAbstractOutputStream {
         shift(4);
     }
 
+    @Override public void unsafeWritePackedInt(int val) {
+        // No-op.
+    }
+
     /** {@inheritDoc} */
     @Override public void unsafeWriteInt(int pos, int val) {
         long addr = ptr + pos;

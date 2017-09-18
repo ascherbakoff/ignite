@@ -36,6 +36,9 @@ public class GridBinaryMarshalerAwareTestClass implements Binarylizable {
     /** */
     public String sRaw;
 
+    /** */
+    public int i;
+
     /** {@inheritDoc} */
     @Override public void writeBinary(BinaryWriter writer) throws BinaryObjectException {
         writer.writeString("s", s);
@@ -43,6 +46,7 @@ public class GridBinaryMarshalerAwareTestClass implements Binarylizable {
         BinaryRawWriter raw = writer.rawWriter();
 
         raw.writeString(sRaw);
+        raw.writePackedInt(i);
     }
 
     /** {@inheritDoc} */
@@ -52,6 +56,7 @@ public class GridBinaryMarshalerAwareTestClass implements Binarylizable {
         BinaryRawReader raw = reader.rawReader();
 
         sRaw = raw.readString();
+        i = raw.readPackedInt();
     }
 
     /** {@inheritDoc} */

@@ -189,6 +189,52 @@ public final class BinaryHeapOutputStream extends BinaryAbstractOutputStream {
     }
 
     /** {@inheritDoc} */
+    @Override public void unsafeWritePackedInt(int val) {
+        long byte1Off = pos;
+        boolean negative;
+
+        if (val < -119) {
+            negative = true;
+            val = -val - 119;
+        }
+        else if (val > 119) {
+            negative = false;
+            val = val - 119;
+        }
+        else {
+            GridUnsafe.putByte(data, GridUnsafe.BYTE_ARR_OFF + pos++, (byte)val);
+
+            return;
+        }
+        pos++;
+
+        GridUnsafe.putByte(data, GridUnsafe.BYTE_ARR_OFF + pos++, (byte)val);
+        if ((val & 0xFFFFFF00) == 0) {
+            GridUnsafe.putByte(data, GridUnsafe.BYTE_ARR_OFF + byte1Off, negative ? (byte)-120 : (byte)120);
+
+            return;
+        }
+
+        GridUnsafe.putByte(data, GridUnsafe.BYTE_ARR_OFF + pos++, (byte)(val >>> 8));
+        if ((val & 0xFFFF0000) == 0) {
+            GridUnsafe.putByte(data, GridUnsafe.BYTE_ARR_OFF + byte1Off, negative ? (byte)-121 : (byte)121);
+
+            return;
+        }
+
+        GridUnsafe.putByte(data, GridUnsafe.BYTE_ARR_OFF + pos++, (byte)(val >>> 16));
+        if ((val & 0xFF000000) == 0) {
+            GridUnsafe.putByte(data, GridUnsafe.BYTE_ARR_OFF + byte1Off, negative ? (byte)-122 : (byte)122);
+
+            return;
+        }
+
+        GridUnsafe.putByte(data, GridUnsafe.BYTE_ARR_OFF + pos++, (byte)(val >>> 24));
+
+        GridUnsafe.putByte(data, GridUnsafe.BYTE_ARR_OFF + byte1Off, negative ? (byte)-123 : (byte)123);
+    }
+
+    /** {@inheritDoc} */
     @Override public void unsafeWriteInt(int pos, int val) {
         long off = GridUnsafe.BYTE_ARR_OFF + pos;
 
