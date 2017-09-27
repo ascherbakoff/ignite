@@ -1650,7 +1650,7 @@ class ServerImpl extends TcpDiscoveryImpl {
     }
 
     /** {@inheritDoc} */
-    @Override public void brakeConnection() {
+    @Override public void breakConnection() {
         throw new UnsupportedOperationException();
     }
 

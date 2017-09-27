@@ -2109,7 +2109,7 @@ public class TcpDiscoverySpi extends IgniteSpiAdapter implements DiscoverySpi {
      * FOR TEST PURPOSE ONLY!
      */
     public void brakeConnection() {
-        impl.brakeConnection();
+        impl.breakConnection();
     }
 
     /**

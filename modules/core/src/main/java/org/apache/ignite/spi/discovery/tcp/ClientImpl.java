@@ -834,7 +834,7 @@ class ClientImpl extends TcpDiscoveryImpl {
     }
 
     /** {@inheritDoc} */
-    @Override public void brakeConnection() {
+    @Override public void breakConnection() {
         SocketStream sockStream = msgWorker.currSock;
 
         if (sockStream != null)

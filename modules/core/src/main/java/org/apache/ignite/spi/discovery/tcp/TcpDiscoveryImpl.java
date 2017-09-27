@@ -289,7 +289,7 @@ abstract class TcpDiscoveryImpl {
     /**
      * FOR TEST PURPOSE ONLY!
      */
-    public abstract void brakeConnection();
+    public abstract void breakConnection();
 
     /**
      * @param maxHops Maximum hops for {@link TcpDiscoveryRingLatencyCheckMessage}.
