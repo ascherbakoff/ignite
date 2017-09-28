@@ -17,50 +17,35 @@
 
 package org.apache.ignite.internal.processors.cache.distributed.dht;
 
-import org.apache.ignite.IgniteCache;
-import org.apache.ignite.IgniteCheckedException;
-import org.apache.ignite.binary.BinaryObject;
-import org.apache.ignite.cache.affinity.Affinity;
-import org.apache.ignite.cache.affinity.rendezvous.RendezvousAffinityFunction;
-import org.apache.ignite.configuration.BinaryConfiguration;
-import org.apache.ignite.configuration.CacheConfiguration;
-import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.configuration.MemoryConfiguration;
-import org.apache.ignite.internal.IgniteEx;
-import org.apache.ignite.internal.IgniteInternalFuture;
-import org.apache.ignite.internal.TestRecordingCommunicationSpi;
-import org.apache.ignite.internal.binary.BinaryObjectImpl;
-import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
-import org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi;
-import org.apache.ignite.spi.discovery.tcp.ipfinder.TcpDiscoveryIpFinder;
-import org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder;
-import org.apache.ignite.spi.discovery.tcp.messages.TcpDiscoveryAbstractMessage;
-import org.apache.ignite.testframework.GridTestUtils;
-import org.apache.ignite.testframework.junits.common.GridCommonAbstractTest;
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.Socket;
-import java.net.SocketTimeoutException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteCache;
+import org.apache.ignite.cache.affinity.Affinity;
+import org.apache.ignite.cache.affinity.rendezvous.RendezvousAffinityFunction;
+import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.configuration.IgniteConfiguration;
+import org.apache.ignite.configuration.MemoryConfiguration;
+import org.apache.ignite.internal.IgniteEx;
+import org.apache.ignite.internal.IgniteInternalFuture;
+import org.apache.ignite.internal.TestRecordingCommunicationSpi;
+import org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi;
+import org.apache.ignite.spi.discovery.tcp.ipfinder.TcpDiscoveryIpFinder;
+import org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder;
 
 import static org.apache.ignite.cache.CacheAtomicityMode.TRANSACTIONAL;
 import static org.apache.ignite.cache.CacheWriteSynchronizationMode.FULL_SYNC;
 
 /**
- * Tests commit consitency in split-brain scenario.
+ * Tests commit consistency in network-split scenario.
  */
-public class GridCacheGridSplitTxConsistencyTest extends GridCommonAbstractTest {
+public class IgniteCacheTopologySplitTxConsistencyTest extends IgniteCacheTopologySplitAbstractTest {
     /** */
     private static final TcpDiscoveryIpFinder IP_FINDER = new TcpDiscoveryVmIpFinder(true);
-
-    /** Switches grid to segmented state. */
-    private volatile boolean segmented;
 
     /** */
     private Map<Integer, Set<Integer>> blockedMap = new HashMap<Integer, Set<Integer>>() {{
@@ -78,19 +63,13 @@ public class GridCacheGridSplitTxConsistencyTest extends GridCommonAbstractTest 
         stopAllGrids();
     }
 
-    /** */
-    private final TestTcpDiscoverySpi[] spis = new TestTcpDiscoverySpi[3];
-
     /**
      * {@inheritDoc}
      */
     @Override protected IgniteConfiguration getConfiguration(String gridName) throws Exception {
         IgniteConfiguration cfg = super.getConfiguration(gridName);
 
-        int idx = getTestIgniteInstanceIndex(gridName);
-        spis[idx] = new TestTcpDiscoverySpi();
-        spis[idx].setSocketTimeout(5_000);
-        cfg.setDiscoverySpi(spis[idx]);
+        cfg.setDiscoverySpi(new SplitTcpDiscoverySpi());
         cfg.setCommunicationSpi(new TestRecordingCommunicationSpi());
 
         cfg.setConsistentId(gridName);
@@ -115,11 +94,21 @@ public class GridCacheGridSplitTxConsistencyTest extends GridCommonAbstractTest 
         return cfg;
     }
 
+    /** {@inheritDoc} */
+    @Override protected boolean isBlocked(int locPort, int rmtPort) {
+        return blockedMap.get(locPort).contains(rmtPort);
+    }
+
+    /** {@inheritDoc} */
+    @Override protected int segment(Ignite ignite) {
+        return ignite == grid(0) ? 0 : 1;
+    }
+
     /**
      * Tests if commits are working as expected.
      * @throws Exception
      */
-    public void testSplitTxConsistency() throws Exception {
+    public void testTopologySplitTxConsistency() throws Exception {
         IgniteEx grid0 = startGrid(0);
         grid0.active(true);
 
@@ -148,7 +137,7 @@ public class GridCacheGridSplitTxConsistencyTest extends GridCommonAbstractTest 
                 }
 
                 try {
-                    waitForSegmentation();
+                    splitAndWait();
                 }
                 catch (Throwable e) {
                     throw new RuntimeException(e);
@@ -158,7 +147,7 @@ public class GridCacheGridSplitTxConsistencyTest extends GridCommonAbstractTest 
             }
         }, 1, "stop-thread");
 
-        IgniteCache cache = grid0.cache(DEFAULT_CACHE_NAME);
+        IgniteCache<Integer, Integer> cache = grid0.cache(DEFAULT_CACHE_NAME);
 
         int val0 = 1;
 
@@ -178,121 +167,5 @@ public class GridCacheGridSplitTxConsistencyTest extends GridCommonAbstractTest 
         // Check if commit is present in second segment.
         assertTrue("Commit not found in segment 2", grid1.cache(DEFAULT_CACHE_NAME).containsKey(0));
         assertTrue("Commit not found in segment 2", grid2.cache(DEFAULT_CACHE_NAME).containsKey(0));
-    }
-
-    protected void waitForSegmentation() throws InterruptedException, IgniteCheckedException {
-        long topVer = grid(0).cluster().topologyVersion();
-
-        // Trigger segmentation.
-        segmented = true;
-
-        // Wait for stable segmented topology.
-        IgniteInternalFuture<Long> fut0 = grid(0).context().discovery().topologyFuture(topVer + 2);
-        IgniteInternalFuture<Long> fut1 = grid(1).context().discovery().topologyFuture(topVer + 1);
-        IgniteInternalFuture<Long> fut2 = grid(2).context().discovery().topologyFuture(topVer + 1);
-
-        fut0.get();
-        fut1.get();
-        fut2.get();
-
-        grid(0).context().cache().context().exchange().lastTopologyFuture().get();
-        grid(1).context().cache().context().exchange().lastTopologyFuture().get();
-        grid(2).context().cache().context().exchange().lastTopologyFuture().get();
-    }
-
-    /**
-     * Discovery SPI which can simulate network split.
-     */
-    private class TestTcpDiscoverySpi extends TcpDiscoverySpi {
-        /**
-         * @param socket Socket.
-         */
-        protected boolean segmented(Socket socket) {
-            if (!segmented)
-                return false;
-
-            int port = socket.getPort();
-
-            Set<Integer> blocked = blockedMap.get(getLocalPort());
-
-            return blocked.contains(port);
-        }
-
-        /**  */
-        @Override protected void writeToSocket(
-                Socket sock,
-                TcpDiscoveryAbstractMessage msg,
-                byte[] data,
-                long timeout
-        ) throws IOException {
-            if (segmented(sock)) {
-                try {
-                    Thread.sleep(timeout);
-                } catch (InterruptedException e) {
-                    // No-op.
-                }
-
-                throw new SocketTimeoutException("Fake socket timeout.");
-            }
-            else
-                super.writeToSocket(sock, msg, data, timeout);
-        }
-
-        /**  */
-        @Override protected void writeToSocket(Socket sock,
-                                               OutputStream out,
-                                               TcpDiscoveryAbstractMessage msg,
-                                               long timeout) throws IOException, IgniteCheckedException {
-            if (segmented(sock)) {
-                try {
-                    Thread.sleep(timeout);
-                } catch (InterruptedException e) {
-                    // No-op.
-                }
-
-                throw new SocketTimeoutException("Fake socket timeout.");
-            }
-            else
-                super.writeToSocket(sock, out, msg, timeout);
-        }
-
-        /**  */
-        @Override protected void writeToSocket(
-                Socket sock,
-                TcpDiscoveryAbstractMessage msg,
-                long timeout
-        ) throws IOException, IgniteCheckedException {
-            if (segmented(sock)) {
-                try {
-                    Thread.sleep(timeout);
-                } catch (InterruptedException e) {
-                    // No-op.
-                }
-
-                throw new SocketTimeoutException("Fake socket timeout.");
-            }
-            else
-                super.writeToSocket(sock, msg, timeout);
-        }
-
-        /**  */
-        @Override protected void writeToSocket(
-                TcpDiscoveryAbstractMessage msg,
-                Socket sock,
-                int res,
-                long timeout
-        ) throws IOException {
-            if (segmented(sock)) {
-                try {
-                    Thread.sleep(timeout);
-                } catch (InterruptedException e) {
-                    // No-op.
-                }
-
-                throw new SocketTimeoutException("Fake socket timeout.");
-            }
-            else
-                super.writeToSocket(msg, sock, res, timeout);
-        }
     }
 }
