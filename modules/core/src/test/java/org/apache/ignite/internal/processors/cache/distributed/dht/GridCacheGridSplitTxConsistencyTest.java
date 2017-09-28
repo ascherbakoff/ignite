@@ -76,8 +76,6 @@ public class GridCacheGridSplitTxConsistencyTest extends GridCommonAbstractTest 
         super.afterTest();
 
         stopAllGrids();
-
-        GridTestUtils.deleteDbFiles();
     }
 
     /** */
@@ -88,8 +86,6 @@ public class GridCacheGridSplitTxConsistencyTest extends GridCommonAbstractTest 
      */
     @Override protected IgniteConfiguration getConfiguration(String gridName) throws Exception {
         IgniteConfiguration cfg = super.getConfiguration(gridName);
-
-        cfg.setBinaryConfiguration(new BinaryConfiguration().setCompactFooter(false));
 
         int idx = getTestIgniteInstanceIndex(gridName);
         spis[idx] = new TestTcpDiscoverySpi();
@@ -176,10 +172,12 @@ public class GridCacheGridSplitTxConsistencyTest extends GridCommonAbstractTest 
         assertFalse(grid1.cluster().nodes().contains(grid0.localNode()));
         assertFalse(grid2.cluster().nodes().contains(grid0.localNode()));
 
-        // Grid is split in two parts now.
-        assertTrue("Expecting committed key", cache.containsKey(0));
-        assertTrue("Expecting committed key", grid1.cache(DEFAULT_CACHE_NAME).containsKey(0));
-        assertTrue("Expecting committed key", grid2.cache(DEFAULT_CACHE_NAME).containsKey(0));
+        // Check if commit is present in first segment.
+        assertTrue("Commit not found in segment 1", cache.containsKey(0));
+
+        // Check if commit is present in second segment.
+        assertTrue("Commit not found in segment 2", grid1.cache(DEFAULT_CACHE_NAME).containsKey(0));
+        assertTrue("Commit not found in segment 2", grid2.cache(DEFAULT_CACHE_NAME).containsKey(0));
     }
 
     protected void waitForSegmentation() throws InterruptedException, IgniteCheckedException {
