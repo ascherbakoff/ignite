@@ -140,7 +140,7 @@ public class IgniteCacheTopologySplitTxConsistencyTest extends IgniteCacheTopolo
                     splitAndWait();
                 }
                 catch (Throwable e) {
-                    throw new RuntimeException(e);
+                    fail();
                 }
 
                 spi0.stopBlock(true);
