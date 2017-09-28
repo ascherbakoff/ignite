@@ -68,7 +68,7 @@ public abstract class IgniteCacheTopologySplitAbstractTest extends GridCommonAbs
     protected abstract boolean isBlocked(int locPort, int rmtPort);
 
     /**
-     * Defines instance segment.
+     * Defines instance segment: 0 or 1.
      *
      * @param ignite Ignite.
      * @return Index of instance segment.
