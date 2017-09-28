@@ -22,9 +22,6 @@ public abstract class IgniteCacheTopologySplitAbstractTest extends GridCommonAbs
     /** Segmentation state. */
     private volatile boolean segmented;
 
-    /** */
-    private final SplitTcpDiscoverySpi[] spis = new SplitTcpDiscoverySpi[3];
-
     /**
      * Trigger segmentation and wait for results.
      * Should be called on stable topology.
