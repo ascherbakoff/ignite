@@ -63,6 +63,9 @@ public class GridTestNode extends GridMetadataAwareAdapter implements ClusterNod
     private long order;
 
     /** */
+    private boolean local;
+
+    /** */
     public GridTestNode() {
         // No-op.
 
@@ -226,7 +229,15 @@ public class GridTestNode extends GridMetadataAwareAdapter implements ClusterNod
 
     /** {@inheritDoc} */
     @Override public boolean isLocal() {
-        return false;
+        return local;
+    }
+
+    /**
+     *
+     * @param loc local flag.
+     */
+    public void local(boolean loc) {
+        this.local = loc;
     }
 
     /** {@inheritDoc} */

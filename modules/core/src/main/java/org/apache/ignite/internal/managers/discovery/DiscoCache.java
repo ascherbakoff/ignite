@@ -97,7 +97,7 @@ public class DiscoCache {
      * @param alives Alive nodes.
      * @param minNodeVer Minimum node version.
      */
-    DiscoCache(
+    public DiscoCache(
         AffinityTopologyVersion topVer,
         DiscoveryDataClusterState state,
         ClusterNode loc,

@@ -55,7 +55,7 @@ public class DiscoveryDataClusterState implements Serializable {
      * @param active Current status.
      * @return State instance.
      */
-    static DiscoveryDataClusterState createState(boolean active) {
+    public static DiscoveryDataClusterState createState(boolean active) {
         return new DiscoveryDataClusterState(active, null, null, null);
     }
 

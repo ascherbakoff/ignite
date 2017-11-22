@@ -121,36 +121,36 @@ public class IgniteCachePartitionMapUpdateTest extends GridCommonAbstractTest {
 
         startGrid(0);
 
-        cache1 = true;
-        cache2 = false;
-
-        startGrid(1);
-
-        awaitPartitionMapExchange();
-
-        cache1 = false;
-        cache2 = true;
-
-        startGrid(2);
-
-        cache1 = true;
-        cache2 = true;
-
-        startGrid(3);
-
-        awaitPartitionMapExchange();
-
-        stopGrid(0);
-
-        awaitPartitionMapExchange();
-
-        stopGrid(1);
-
-        awaitPartitionMapExchange();
-
-        stopGrid(2);
-
-        awaitPartitionMapExchange();
+//        cache1 = true;
+//        cache2 = false;
+//
+//        startGrid(1);
+//
+//        awaitPartitionMapExchange();
+//
+//        cache1 = false;
+//        cache2 = true;
+//
+//        startGrid(2);
+//
+//        cache1 = true;
+//        cache2 = true;
+//
+//        startGrid(3);
+//
+//        awaitPartitionMapExchange();
+//
+//        stopGrid(0);
+//
+//        awaitPartitionMapExchange();
+//
+//        stopGrid(1);
+//
+//        awaitPartitionMapExchange();
+//
+//        stopGrid(2);
+//
+//        awaitPartitionMapExchange();
     }
 
     /**

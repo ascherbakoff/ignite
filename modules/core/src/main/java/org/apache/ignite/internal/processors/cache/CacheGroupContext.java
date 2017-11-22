@@ -156,7 +156,7 @@ public class CacheGroupContext {
      * @param reuseList Reuse list.
      * @param locStartVer Topology version when group was started on local node.
      */
-    CacheGroupContext(
+    public CacheGroupContext(
         GridCacheSharedContext ctx,
         int grpId,
         UUID rcvdFrom,
@@ -169,7 +169,6 @@ public class CacheGroupContext {
         ReuseList reuseList,
         AffinityTopologyVersion locStartVer) {
         assert ccfg != null;
-        assert memPlc != null || !affNode;
         assert grpId != 0 : "Invalid group ID [cache=" + ccfg.getName() + ", grpName=" + ccfg.getGroupName() + ']';
 
         this.grpId = grpId;
@@ -186,9 +185,9 @@ public class CacheGroupContext {
 
         ioPlc = cacheType.ioPolicy();
 
-        depEnabled = ctx.kernalContext().deploy().enabled() && !ctx.kernalContext().cacheObjects().isBinaryEnabled(ccfg);
+        depEnabled = false;
 
-        storeCacheId = affNode && memPlc.config().getPageEvictionMode() != DataPageEvictionMode.DISABLED;
+        storeCacheId = false;
 
         log = ctx.kernalContext().log(getClass());
 
