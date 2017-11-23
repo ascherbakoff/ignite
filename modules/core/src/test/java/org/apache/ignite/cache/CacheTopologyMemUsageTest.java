@@ -10,10 +10,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.apache.ignite.Ignite;
+import org.apache.ignite.IgniteCheckedException;
 import org.apache.ignite.cache.affinity.AffinityFunction;
 import org.apache.ignite.cache.affinity.rendezvous.RendezvousAffinityFunction;
 import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
+import org.apache.ignite.configuration.IgniteConfiguration;
 import org.apache.ignite.events.DiscoveryEvent;
 import org.apache.ignite.events.EventType;
 import org.apache.ignite.internal.GridNodeOrderComparator;
@@ -23,6 +26,7 @@ import org.apache.ignite.internal.processors.affinity.GridAffinityFunctionContex
 import org.apache.ignite.internal.processors.cache.CacheGroupContext;
 import org.apache.ignite.internal.processors.cache.CacheType;
 import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
+import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtPartitionTopologyImpl;
 import org.apache.ignite.internal.processors.cluster.DiscoveryDataClusterState;
 import org.apache.ignite.internal.util.typedef.internal.CU;
 import org.apache.ignite.internal.util.typedef.internal.U;
@@ -39,10 +43,28 @@ public class CacheTopologyMemUsageTest extends GridCommonAbstractTest {
     /** */
     private Map<Integer, CacheGroupContext> registeredCacheGrps = new HashMap<>();
 
+    @Override protected IgniteConfiguration getConfiguration(String igniteInstanceName) throws Exception {
+        final IgniteConfiguration cfg = super.getConfiguration(igniteInstanceName);
+
+        cfg.setCacheConfiguration(new CacheConfiguration("test"));
+
+        return cfg;
+    }
+
     /** */
     private DiscoCache discoCache;
 
-    public void test() {
+    /** */
+    public void testStartNode() throws Exception {
+        try {
+            Ignite ig = startGrid(0) ;
+        }
+        finally {
+            stopAllGrids();
+        }
+    }
+
+    public void test() throws IgniteCheckedException {
         AffinityFunction aff = new RendezvousAffinityFunction(false, 8192);
 
         final int nodesCnt = 10;
@@ -53,19 +75,14 @@ public class CacheTopologyMemUsageTest extends GridCommonAbstractTest {
 
         List<List<ClusterNode>> prev = null;
 
-        GridTestKernalContext kernalCtx = new GridTestKernalContext(log);
-
-        GridCacheSharedContext<Object, Object> ctx = new GridCacheSharedContext<>(kernalCtx, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null);
+        final IgniteConfiguration cfg = new IgniteConfiguration();
+        cfg.setClientMode(false);
 
         AffinityTopologyVersion topVer = new AffinityTopologyVersion(1, 0);
 
-        CacheGroupContext cacheGrpCtx = new CacheGroupContext(ctx, CU.cacheId("testGrp"), UUID.randomUUID(),
-            CacheType.USER, new CacheConfiguration().setGroupName("testGrp"), true, null, null, null, null, topVer);
-
         GridTestNode locNode = new GridTestNode(UUID.randomUUID());
 
-        locNode.order(1);
+        locNode.order(topVer.topologyVersion());
 
         locNode.local(true);
 
@@ -74,7 +91,7 @@ public class CacheTopologyMemUsageTest extends GridCommonAbstractTest {
         DiscoveryEvent discoEvt = new DiscoveryEvent(locNode, "", EventType.EVT_NODE_JOINED, locNode);
 
         GridAffinityFunctionContextImpl affCtx =
-            new GridAffinityFunctionContextImpl(nodes, null, discoEvt, topVer, 3);
+            new GridAffinityFunctionContextImpl(nodes, null, discoEvt, topVer, backups);
 
         List<List<ClusterNode>> assignment = aff.assignPartitions(affCtx);
 
@@ -84,6 +101,25 @@ public class CacheTopologyMemUsageTest extends GridCommonAbstractTest {
 
         discoCache = createDiscoCache(topVer, globalState, locNode, nodes);
 
+        GridTestKernalContext kernalCtx = new GridTestKernalContext(log, cfg);
+
+        GridCacheSharedContext<Object, Object> ctx = new GridCacheSharedContext<>(kernalCtx, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null);
+
+        final CacheConfiguration ccfg = new CacheConfiguration();
+
+        ccfg.setNodeFilter(CacheConfiguration.ALL_NODES);
+        ccfg.setAffinity(new RendezvousAffinityFunction(false, 1024));
+        ccfg.setGroupName("testGrp");
+
+        CacheGroupContext cacheGrpCtx = new CacheGroupContext(ctx, CU.cacheId("testGrp"), UUID.randomUUID(),
+            CacheType.USER, ccfg, true, null, null, null, null, topVer);
+
+        cacheGrpCtx.start();
+
+        final GridDhtPartitionTopologyImpl top = new GridDhtPartitionTopologyImpl(ctx, cacheGrpCtx);
+
+        // Add more nodes and update topology.
         for (int i = 1; i < nodesCnt; i++) {
             GridTestNode node = new GridTestNode(UUID.randomUUID());
 
@@ -103,8 +139,6 @@ public class CacheTopologyMemUsageTest extends GridCommonAbstractTest {
 
             discoCache = createDiscoCache(topVer, globalState, locNode, nodes);
         }
-
-        System.out.println(discoCache);
     }
 
     @NotNull private DiscoCache createDiscoCache(
