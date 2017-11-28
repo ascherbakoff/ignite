@@ -1,40 +1,27 @@
 package org.apache.ignite.cache;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.UUID;
-import org.apache.ignite.Ignite;
+import jdk.nashorn.internal.ir.debug.ObjectSizeCalculator;
 import org.apache.ignite.IgniteCheckedException;
-import org.apache.ignite.cache.affinity.AffinityFunction;
 import org.apache.ignite.cache.affinity.rendezvous.RendezvousAffinityFunction;
-import org.apache.ignite.cluster.ClusterNode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.configuration.IgniteConfiguration;
-import org.apache.ignite.events.DiscoveryEvent;
-import org.apache.ignite.events.EventType;
-import org.apache.ignite.internal.GridNodeOrderComparator;
-import org.apache.ignite.internal.managers.discovery.DiscoCache;
+import org.apache.ignite.internal.IgniteEx;
 import org.apache.ignite.internal.processors.affinity.AffinityTopologyVersion;
-import org.apache.ignite.internal.processors.affinity.GridAffinityFunctionContextImpl;
 import org.apache.ignite.internal.processors.cache.CacheGroupContext;
-import org.apache.ignite.internal.processors.cache.CacheType;
-import org.apache.ignite.internal.processors.cache.GridCacheSharedContext;
-import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtPartitionTopologyImpl;
-import org.apache.ignite.internal.processors.cluster.DiscoveryDataClusterState;
+import org.apache.ignite.internal.processors.cache.GridCachePartitionExchangeManager;
+import org.apache.ignite.internal.processors.cache.distributed.dht.GridDhtPartitionTopology;
+import org.apache.ignite.internal.processors.cache.distributed.dht.preloader.CachePartitionFullCountersMap;
+import org.apache.ignite.internal.processors.cache.distributed.dht.preloader.GridDhtPartitionFullMap;
+import org.apache.ignite.internal.processors.cache.distributed.dht.preloader.GridDhtPartitionsExchangeFuture;
+import org.apache.ignite.internal.processors.cache.distributed.dht.preloader.GridDhtPartitionsFullMessage;
 import org.apache.ignite.internal.util.typedef.internal.CU;
+import org.apache.ignite.internal.util.typedef.internal.S;
 import org.apache.ignite.internal.util.typedef.internal.U;
-import org.apache.ignite.lang.IgniteProductVersion;
-import org.apache.ignite.testframework.GridTestNode;
-import org.apache.ignite.testframework.junits.GridTestKernalContext;
 import org.apache.ignite.testframework.junits.common.GridCommonAbstractTest;
-import org.jetbrains.annotations.NotNull;
 
 /**
  * Created by A.Scherbakov on 11/22/2017.
@@ -43,210 +30,128 @@ public class CacheTopologyMemUsageTest extends GridCommonAbstractTest {
     /** */
     private Map<Integer, CacheGroupContext> registeredCacheGrps = new HashMap<>();
 
+    /** */
+    public static final String CACHE_NAME_1 = "cache1";
+
+    /** */
+    public static final String CACHE_NAME_2 = "cache2";
+
+    /** {@inheritDoc} */
     @Override protected IgniteConfiguration getConfiguration(String igniteInstanceName) throws Exception {
         final IgniteConfiguration cfg = super.getConfiguration(igniteInstanceName);
 
-        cfg.setCacheConfiguration(new CacheConfiguration("test"));
+        cfg.setClientMode("client".equals(igniteInstanceName));
+
+        final CacheConfiguration ccfg = new CacheConfiguration(DEFAULT_CACHE_NAME);
+        ccfg.setAffinity(new RendezvousAffinityFunction(false, CacheConfiguration.MAX_PARTITIONS_COUNT));
+        ccfg.setBackups(0);
+
+        cfg.setCacheConfiguration(ccfg);
 
         return cfg;
     }
 
-    /** */
-    private DiscoCache discoCache;
+    /** {@inheritDoc} */
+    @Override protected void afterTest() throws Exception {
+        super.afterTest();
 
-    /** */
-    public void testStartNode() throws Exception {
-        try {
-            Ignite ig = startGrid(0) ;
-        }
-        finally {
-            stopAllGrids();
-        }
+        stopAllGrids();
     }
 
-    public void test() throws IgniteCheckedException {
-        AffinityFunction aff = new RendezvousAffinityFunction(false, 8192);
+    /**
+     * Tests partition topology mem usage.
+     */
+    public void testMemUsage() throws Exception {
+        int nodesCnt = 2;
 
-        final int nodesCnt = 10;
+        List<HeapUsage> usages = new ArrayList<>(nodesCnt);
 
-        final int backups = 3;
+        final IgniteEx ig = startGrid(0);
 
-        List<ClusterNode> nodes = new ArrayList<>(nodesCnt);
+        usages.add(computeHeapUsage(ig));
 
-        List<List<ClusterNode>> prev = null;
-
-        final IgniteConfiguration cfg = new IgniteConfiguration();
-        cfg.setClientMode(false);
-
-        AffinityTopologyVersion topVer = new AffinityTopologyVersion(1, 0);
-
-        GridTestNode locNode = new GridTestNode(UUID.randomUUID());
-
-        locNode.order(topVer.topologyVersion());
-
-        locNode.local(true);
-
-        nodes.add(locNode);
-
-        DiscoveryEvent discoEvt = new DiscoveryEvent(locNode, "", EventType.EVT_NODE_JOINED, locNode);
-
-        GridAffinityFunctionContextImpl affCtx =
-            new GridAffinityFunctionContextImpl(nodes, null, discoEvt, topVer, backups);
-
-        List<List<ClusterNode>> assignment = aff.assignPartitions(affCtx);
-
-        prev = assignment;
-
-        DiscoveryDataClusterState globalState = DiscoveryDataClusterState.createState(true);
-
-        discoCache = createDiscoCache(topVer, globalState, locNode, nodes);
-
-        GridTestKernalContext kernalCtx = new GridTestKernalContext(log, cfg);
-
-        GridCacheSharedContext<Object, Object> ctx = new GridCacheSharedContext<>(kernalCtx, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null);
-
-        final CacheConfiguration ccfg = new CacheConfiguration();
-
-        ccfg.setNodeFilter(CacheConfiguration.ALL_NODES);
-        ccfg.setAffinity(new RendezvousAffinityFunction(false, 1024));
-        ccfg.setGroupName("testGrp");
-
-        CacheGroupContext cacheGrpCtx = new CacheGroupContext(ctx, CU.cacheId("testGrp"), UUID.randomUUID(),
-            CacheType.USER, ccfg, true, null, null, null, null, topVer);
-
-        cacheGrpCtx.start();
-
-        final GridDhtPartitionTopologyImpl top = new GridDhtPartitionTopologyImpl(ctx, cacheGrpCtx);
-
-        // Add more nodes and update topology.
         for (int i = 1; i < nodesCnt; i++) {
-            GridTestNode node = new GridTestNode(UUID.randomUUID());
+            startGrid(i);
 
-            node.order(i + 1);
+            awaitPartitionMapExchange();
 
-            nodes.add(node);
-
-            discoEvt = new DiscoveryEvent(node, "", EventType.EVT_NODE_JOINED, node);
-
-            topVer = new AffinityTopologyVersion(node.order());
-
-            affCtx = new GridAffinityFunctionContextImpl(nodes, prev, discoEvt, topVer, backups);
-
-            assignment = aff.assignPartitions(affCtx);
-
-            prev = assignment;
-
-            discoCache = createDiscoCache(topVer, globalState, locNode, nodes);
+            usages.add(computeHeapUsage(ig));
         }
+
+        for (HeapUsage usage : usages)
+            log.info(usage.toString());
     }
 
-    @NotNull private DiscoCache createDiscoCache(
-        AffinityTopologyVersion topVer,
-        DiscoveryDataClusterState state,
-        ClusterNode loc,
-        Collection<ClusterNode> topSnapshot) {
-        assert topSnapshot.contains(loc);
+    private HeapUsage computeHeapUsage(IgniteEx ig) throws IgniteCheckedException {
+        CacheGroupContext grpCtx = ig.context().cache().cacheGroup(CU.cacheId(DEFAULT_CACHE_NAME));
 
-        HashSet<UUID> alives = U.newHashSet(topSnapshot.size());
-        HashMap<UUID, ClusterNode> nodeMap = U.newHashMap(topSnapshot.size());
+        GridDhtPartitionTopology top = grpCtx.topology();
 
-        ArrayList<ClusterNode> daemonNodes = new ArrayList<>(topSnapshot.size());
-        ArrayList<ClusterNode> srvNodes = new ArrayList<>(topSnapshot.size());
-        ArrayList<ClusterNode> rmtNodes = new ArrayList<>(topSnapshot.size());
-        ArrayList<ClusterNode> allNodes = new ArrayList<>(topSnapshot.size());
+        long fullMapSize = ObjectSizeCalculator.getObjectSize(U.field(top, "node2part"));
 
-        IgniteProductVersion minVer = null;
+        long cntrMapSize = ObjectSizeCalculator.getObjectSize(U.field(top, "cntrMap"));
 
-        for (ClusterNode node : topSnapshot) {
-            alives.add(node.id());
+        long diffMapSize = ObjectSizeCalculator.getObjectSize(U.field(top, "diffFromAffinity"));
 
-            if (node.isDaemon())
-                daemonNodes.add(node);
-            else {
-                allNodes.add(node);
+        final GridCachePartitionExchangeManager<Object, Object> mgr = ig.context().cache().context().exchange();
 
-                if (!node.isLocal())
-                    rmtNodes.add(node);
+        final List<GridDhtPartitionsExchangeFuture> futs = mgr.exchangeFutures();
 
-                if (!CU.clientNode(node))
-                    srvNodes.add(node);
-            }
+        long exchHistSize = 0;
 
-            nodeMap.put(node.id(), node);
+        final AffinityTopologyVersion topVer = mgr.readyAffinityVersion();
 
-            if (minVer == null)
-                minVer = node.version();
-            else if (node.version().compareTo(minVer) < 0)
-                minVer = node.version();
+        for (GridDhtPartitionsExchangeFuture fut : futs) {
+            GridDhtPartitionsFullMessage msg = U.field(U.field(fut, "finishState"), "msg");
+
+            final GridDhtPartitionsFullMessage cpy = U.invoke(GridDhtPartitionsFullMessage.class, msg, "copy");
+
+            cpy.exchangeId(null);
+
+            exchHistSize += ObjectSizeCalculator.getObjectSize(cpy);
         }
 
-        assert !rmtNodes.contains(loc) : "Remote nodes collection shouldn't contain local node" +
-            " [rmtNodes=" + rmtNodes + ", loc=" + loc + ']';
-
-        Map<Integer, List<ClusterNode>> allCacheNodes = U.newHashMap(allNodes.size());
-        Map<Integer, List<ClusterNode>> cacheGrpAffNodes = U.newHashMap(allNodes.size());
-        Set<ClusterNode> rmtNodesWithCaches = new TreeSet<>(GridNodeOrderComparator.INSTANCE);
-
-        fillAffinityNodeCaches(allNodes, allCacheNodes, cacheGrpAffNodes, rmtNodesWithCaches);
-
-        return new DiscoCache(
-            topVer,
-            state,
-            loc,
-            Collections.unmodifiableList(rmtNodes),
-            Collections.unmodifiableList(allNodes),
-            Collections.unmodifiableList(srvNodes),
-            Collections.unmodifiableList(daemonNodes),
-            U.sealList(rmtNodesWithCaches),
-            Collections.unmodifiableMap(allCacheNodes),
-            Collections.unmodifiableMap(cacheGrpAffNodes),
-            Collections.unmodifiableMap(nodeMap),
-            alives,
-            minVer);
+        return new HeapUsage(topVer, diffMapSize, fullMapSize, cntrMapSize, exchHistSize);
     }
 
-    /**
-     * Fills affinity node caches.
-     *
-     * @param allNodes All nodes.
-     * @param allCacheNodes All cache nodes.
-     * @param cacheGrpAffNodes Cache group aff nodes.
-     * @param rmtNodesWithCaches Rmt nodes with caches.
-     */
-    private void fillAffinityNodeCaches(List<ClusterNode> allNodes, Map<Integer, List<ClusterNode>> allCacheNodes,
-        Map<Integer, List<ClusterNode>> cacheGrpAffNodes, Set<ClusterNode> rmtNodesWithCaches) {
-        for (ClusterNode node : allNodes) {
-            for (Map.Entry<Integer, CacheGroupContext> e : registeredCacheGrps.entrySet()) {
-                CacheGroupContext grpAff = e.getValue();
-                Integer grpId = e.getKey();
+    /** */
+    private static class HeapUsage {
+        final AffinityTopologyVersion topVer;
 
-                List<ClusterNode> nodes = cacheGrpAffNodes.get(grpId);
+        /** */
+        final long diffMapSize;
 
-                if (nodes == null)
-                    cacheGrpAffNodes.put(grpId, nodes = new ArrayList<>());
+        /** */
+        final long fullMapSize;
 
-                nodes.add(node);
-            }
-        }
-    }
+        /** */
+        final long cntrMapSize;
 
-    /**
-     * Adds node to map.
-     *
-     * @param cacheMap Map to add to.
-     * @param cacheName Cache name.
-     * @param rich Node to add
-     */
-    private void addToMap(Map<Integer, List<ClusterNode>> cacheMap, String cacheName, ClusterNode rich) {
-        List<ClusterNode> cacheNodes = cacheMap.get(CU.cacheId(cacheName));
+        /** */
+        final long exchHistorySize;
 
-        if (cacheNodes == null) {
-            cacheNodes = new ArrayList<>();
-
-            cacheMap.put(CU.cacheId(cacheName), cacheNodes);
+        /**
+         * @param fullMapSize Full map size.
+         * @param cntrMapSize Counter map size.
+         * @param exchHistSize Exchange history size.
+         */
+        public HeapUsage(AffinityTopologyVersion topVer, long diffMapSize, long fullMapSize, long cntrMapSize, long exchHistSize) {
+            this.topVer = topVer;
+            this.diffMapSize = diffMapSize;
+            this.fullMapSize = fullMapSize;
+            this.cntrMapSize = cntrMapSize;
+            this.exchHistorySize = exchHistSize;
         }
 
-        cacheNodes.add(rich);
+        /** {@inheritDoc} */
+        @Override public String toString() {
+            return "HeapUsage: [" +
+                "topVer=" + topVer +
+                ", diffMapSize=" + diffMapSize +
+                ", fullMapSize=" + fullMapSize +
+                ", cntrMapSize=" + cntrMapSize +
+                ", exchHistorySize=" + exchHistorySize +
+                ']';
+        }
     }
 }
