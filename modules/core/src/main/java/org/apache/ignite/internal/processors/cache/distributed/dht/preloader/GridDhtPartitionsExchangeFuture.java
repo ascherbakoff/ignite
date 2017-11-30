@@ -3468,7 +3468,7 @@ public class GridDhtPartitionsExchangeFuture extends GridDhtTopologyFutureAdapte
         FinishState(UUID crdId, AffinityTopologyVersion resTopVer, GridDhtPartitionsFullMessage msg) {
             this.crdId = crdId;
             this.resTopVer = resTopVer;
-            this.msg = msg;
+            this.msg = msg.copy().clearBuffers(); // Store message in history without temporary buffers
         }
     }
 

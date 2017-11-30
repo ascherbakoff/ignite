@@ -257,6 +257,20 @@ public class GridDhtPartitionsFullMessage extends GridDhtPartitionsAbstractMessa
     }
 
     /**
+     * Clears byte arrays with serialized data.
+     */
+    public GridDhtPartitionsFullMessage clearBuffers() {
+        partsBytes = null;
+        partCntrsBytes = null;
+        partCntrsBytes2 = null;
+        partHistSuppliersBytes = null;
+        partsToReloadBytes = null;
+        errsBytes = null;
+
+        return this;
+    }
+
+    /**
      * @param grpId Cache group ID.
      * @param fullMap Full partitions map.
      * @param dupDataCache Optional ID of cache with the same partition state map.
