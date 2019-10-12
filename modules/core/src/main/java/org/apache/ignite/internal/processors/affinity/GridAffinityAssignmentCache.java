@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
@@ -319,18 +320,10 @@ public class GridAffinityAssignmentCache {
         else
             sorted = Collections.singletonList(ctx.discovery().localNode());
 
-        boolean hasBaseline = false;
-        boolean changedBaseline = false;
+        BaselineTopology blt = discoCache != null ? discoCache.state().baselineTopology() : null;
 
-        BaselineTopology blt = null;
-
-        if (discoCache != null) {
-            blt = discoCache.state().baselineTopology();
-
-            hasBaseline = blt != null;
-
-            changedBaseline = !hasBaseline ? baselineTopology != null : !blt.equals(baselineTopology);
-        }
+        boolean hasBaseline = blt != null;
+        boolean changedBaseline = !Objects.equals(blt, baselineTopology);
 
         IdealAffinityAssignment assignment;
 

@@ -1618,6 +1618,23 @@ public class CacheAffinitySharedManager<K, V> extends GridCacheSharedManagerAdap
     }
 
     /**
+     * Called on exchange initiated by baseline server node leave.
+     *
+     * @param fut Exchange future.
+     * @param crd Coordinator flag.
+     * @return {@code True} if affinity should be assigned by coordinator (local node for this case).
+     */
+    public boolean onBaselineNodeLeft(final GridDhtPartitionsExchangeFuture fut, boolean crd) {
+        assert (fut.events().hasServerLeft() && !fut.firstEvent().eventNode().isClient()) : fut.firstEvent();
+
+        assert !fut.context().mergeExchanges();
+
+        onReassignmentEnforced(fut);
+
+        return true;
+    }
+
+    /**
      * Selects current alive owners for some partition as affinity distribution.
      *
      * @param aliveNodes Alive cluster nodes.
@@ -1982,7 +1999,7 @@ public class CacheAffinitySharedManager<K, V> extends GridCacheSharedManagerAdap
         });
 
         synchronized (mux) {
-            this.waitInfo = null;
+            waitInfo = null;
         }
 
         return true;
