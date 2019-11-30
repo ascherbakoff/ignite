@@ -498,7 +498,7 @@ public class GridDhtLocalPartition extends GridCacheConcurrentMapImpl implements
                 if (reservations == 0) {
                     if (delayedRentingTopVer != 0 &&
                         // Prevents delayed renting on topology which expects owninership.
-                        delayedRentingTopVer == ctx.exchange().lastFinishedFuture().topologyVersion().topologyVersion())
+                        delayedRentingTopVer == ctx.exchange().readyAffinityVersion().topologyVersion())
                         rent(true);
                     else if (getPartState(state) == RENTING)
                         tryContinueClearing();
@@ -658,7 +658,7 @@ public class GridDhtLocalPartition extends GridCacheConcurrentMapImpl implements
         if (partState == RENTING || partState == EVICTED)
             return rent;
 
-        delayedRentingTopVer = ctx.exchange().lastFinishedFuture().topologyVersion().topologyVersion();
+        delayedRentingTopVer = ctx.exchange().readyAffinityVersion().topologyVersion();
 
         if (getReservations(state0) == 0 && casState(state0, RENTING)) {
             delayedRentingTopVer = 0;
